@@ -6,12 +6,17 @@
 # Output files
 output/
 logs/
-*.mp4
 *.log
 
-# Ignore audio files in output directory only (not background_music/)
+# Ignore video and audio files in output/test_output only (not predefined_media/)
+output/*.mp4
+output/*.avi
+output/*.mov
 output/*.mp3
 output/*.wav
+test_output/*.mp4
+test_output/*.avi
+test_output/*.mov
 test_output/*.mp3
 test_output/*.wav
 test_output/*
