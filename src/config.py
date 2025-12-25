@@ -55,7 +55,7 @@ class Config:
 
     # Background Music
     enable_background_music: bool = True
-    background_music_volume: float = 0.5  # Volume level (0.0-1.0)
+    background_music_volume: float = 0.06  # Volume level (0.0-1.0) - 6% to not overpower voice
 
     # Audio Settings (ElevenLabs)
     elevenlabs_voice_id: Optional[str] = None
