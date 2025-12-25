@@ -7,17 +7,17 @@
 output/
 logs/
 *.mp4
-*.mp3
-*.wav
 *.log
 
-# Background music files (but keep README)
-background_music/*.mp3
-background_music/*.wav
-background_music/*.m4a
-background_music/*.aac
-background_music/*.ogg
-!background_music/README.md
+# Ignore audio files in output directory only (not background_music/)
+output/*.mp3
+output/*.wav
+test_output/*.mp3
+test_output/*.wav
+test_output/*
+
+# Background music files are now committed to git for GitHub Actions
+# (Make sure they are royalty-free and properly licensed!)
 
 # Pre-defined media files (but keep README)
 predefined_media/**/*.jpg

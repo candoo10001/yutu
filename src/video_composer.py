@@ -27,6 +27,62 @@ class VideoComposer:
         self.config = config
         self.logger = logger or structlog.get_logger()
 
+    def _convert_tts_to_subtitle_format(self, text: str) -> str:
+        """
+        Convert TTS-optimized Korean text to subtitle-friendly format.
+        Converts Korean number words back to numeric symbols for better readability.
+
+        Args:
+            text: TTS-optimized Korean text with spelled-out numbers
+
+        Returns:
+            Subtitle-friendly text with numeric symbols
+        """
+        import re
+
+        # Common number word to numeric conversions
+        replacements = [
+            # Percentages
+            (r'퍼센트', '%'),
+
+            # Currency
+            (r'달러', '$'),
+            (r'원', '₩'),
+
+            # Common fractions and decimals (context-aware)
+            (r'일점오', '1.5'),
+            (r'이점오', '2.5'),
+            (r'삼점오', '3.5'),
+            (r'사점오', '4.5'),
+            (r'오점오', '5.5'),
+            (r'육점오', '6.5'),
+            (r'칠점오', '7.5'),
+            (r'팔점오', '8.5'),
+            (r'구점오', '9.5'),
+
+            # Large numbers
+            (r'(\d+)\s*억', r'\1억'),  # Keep spacing correct for billions
+            (r'(\d+)\s*만', r'\1만'),  # Keep spacing correct for ten-thousands
+
+            # Quarter references (분기)
+            (r'일\s*분기', '1분기'),
+            (r'이\s*분기', '2분기'),
+            (r'삼\s*분기', '3분기'),
+            (r'사\s*분기', '4분기'),
+
+            # Common number + 억 patterns
+            (r'십억', '10억'),
+            (r'백억', '100억'),
+            (r'천억', '1000억'),
+            (r'일조', '1조'),
+        ]
+
+        result = text
+        for pattern, replacement in replacements:
+            result = re.sub(pattern, replacement, result)
+
+        return result
+
     def combine_video_audio(
         self,
         video_path: str,
@@ -375,19 +431,25 @@ class VideoComposer:
                 font_path = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
                 font_name = "Noto Sans CJK KR"
             
-            # Escape single quotes in title text for ffmpeg
-            escaped_title = segment_title.replace("'", "'\\''")
-            
+            # Escape special characters in title text for ffmpeg
+            # Colons need to be escaped as they're used as parameter separators in filters
+            escaped_title = segment_title.replace("'", "'\\''").replace(":", "\\:")
+
+            # Enhanced title for mobile visibility: larger font (80), extra tall box (260), extreme top padding
+            # Extreme top padding: text starts at ~160px from top for absolute maximum mobile visibility
             title_filter = (
-                f"drawbox=y=0:color=black@0.8:width={width}:height=140:t=fill,"
+                f"drawbox=y=0:color=black@0.8:width={width}:height=260:t=fill,"
+                # Outer glow effects (yellow glow for visibility)
                 f"drawtext=text='{escaped_title}':fontfile={font_path}:"
-                f"fontsize=56:fontcolor=yellow@0.3:x=(w-text_w)/2:y=38:borderw=0,"
+                f"fontsize=80:fontcolor=yellow@0.3:x=(w-text_w)/2:y=158:borderw=0,"
                 f"drawtext=text='{escaped_title}':fontfile={font_path}:"
-                f"fontsize=56:fontcolor=yellow@0.2:x=(w-text_w)/2:y=36:borderw=0,"
+                f"fontsize=80:fontcolor=yellow@0.2:x=(w-text_w)/2:y=156:borderw=0,"
+                # Main text with bold outline for readability
                 f"drawtext=text='{escaped_title}':fontfile={font_path}:"
-                f"fontsize=56:fontcolor=white:x=(w-text_w)/2:y=42:borderw=4:bordercolor=black@0.8,"
+                f"fontsize=80:fontcolor=white:x=(w-text_w)/2:y=162:borderw=5:bordercolor=black@0.9,"
+                # Inner highlight layer
                 f"drawtext=text='{escaped_title}':fontfile={font_path}:"
-                f"fontsize=56:fontcolor=white:x=(w-text_w)/2:y=40"
+                f"fontsize=80:fontcolor=white:x=(w-text_w)/2:y=160"
             )
 
             # Build ffmpeg command
@@ -587,23 +649,26 @@ class VideoComposer:
                     font_path = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
                     font_name = "Noto Sans CJK KR"
                 
-                # Escape single quotes in title text for ffmpeg
-                escaped_title = segment_title.replace("'", "'\\''")
-                
+                # Escape special characters in title text for ffmpeg
+                # Colons need to be escaped as they're used as parameter separators in filters
+                escaped_title = segment_title.replace("'", "'\\''").replace(":", "\\:")
+
+                # Enhanced title for mobile visibility: larger font (80), extra tall box (260), extreme top padding
+                # Extreme top padding: text starts at ~160px from top for absolute maximum mobile visibility
                 title_filter = (
                     # Gradient background bar (dark to transparent)
-                    f"drawbox=y=0:color=black@0.8:width={width}:height=140:t=fill,"
+                    f"drawbox=y=0:color=black@0.8:width={width}:height=260:t=fill,"
                     # Outer glow effect (multiple layers for smooth glow)
                     f"drawtext=text='{escaped_title}':fontfile={font_path}:"
-                    f"fontsize=56:fontcolor=yellow@0.3:x=(w-text_w)/2:y=38:borderw=0,"
+                    f"fontsize=80:fontcolor=yellow@0.3:x=(w-text_w)/2:y=158:borderw=0,"
                     f"drawtext=text='{escaped_title}':fontfile={font_path}:"
-                    f"fontsize=56:fontcolor=yellow@0.2:x=(w-text_w)/2:y=36:borderw=0,"
-                    # Main text with bold outline
+                    f"fontsize=80:fontcolor=yellow@0.2:x=(w-text_w)/2:y=156:borderw=0,"
+                    # Main text with bold outline for readability
                     f"drawtext=text='{escaped_title}':fontfile={font_path}:"
-                    f"fontsize=56:fontcolor=white:x=(w-text_w)/2:y=42:borderw=4:bordercolor=black@0.8,"
-                    # Inner highlight
+                    f"fontsize=80:fontcolor=white:x=(w-text_w)/2:y=162:borderw=5:bordercolor=black@0.9,"
+                    # Inner highlight layer
                     f"drawtext=text='{escaped_title}':fontfile={font_path}:"
-                    f"fontsize=56:fontcolor=white:x=(w-text_w)/2:y=40"
+                    f"fontsize=80:fontcolor=white:x=(w-text_w)/2:y=160"
                 )
 
                 # Combine Ken Burns effect with title overlay
@@ -667,9 +732,13 @@ class VideoComposer:
 
             audio_list_file.unlink()  # Clean up
 
+            # Define audio speed factor (used for both audio processing and subtitle timing)
+            speed_factor = 1.2  # 1.2x speed
+
             # Step 4: Create subtitle file (SRT format) with word-by-word timing
+            # Adjust subtitle timing to match sped-up audio (divide by speed_factor)
             if self.config.enable_subtitles:
-                self.logger.info("creating_subtitle_file")
+                self.logger.info("creating_subtitle_file", speed_factor=speed_factor)
                 subtitle_file = output_path / f"subtitles_{timestamp}.srt"
 
                 with open(subtitle_file, 'w', encoding='utf-8') as f:
@@ -677,15 +746,19 @@ class VideoComposer:
                     subtitle_index = 1
 
                     for segment in segments_data:
+                        # Convert TTS-optimized text to subtitle format (numbers as symbols)
+                        subtitle_text = self._convert_tts_to_subtitle_format(segment['text'])
+
                         # Split text into words (Korean uses spaces between phrases/clauses)
-                        words = segment['text'].split()
+                        words = subtitle_text.split()
                         total_words = len(words)
 
                         if total_words == 0:
                             continue
 
-                        # Calculate duration per word
-                        segment_duration = segment['audio_duration']
+                        # Calculate duration per word (adjusted for audio speed)
+                        # When audio is sped up by 1.2x, the actual duration is original_duration / 1.2
+                        segment_duration = segment['audio_duration'] / speed_factor
                         time_per_word = segment_duration / total_words
 
                         # Group words into chunks for 2-line subtitles
@@ -791,9 +864,9 @@ class VideoComposer:
                 # Combine video with audio and burn in subtitles
                 video_input = ffmpeg.input(concatenated_video)
                 audio_input = ffmpeg.input(str(concatenated_audio))
-                
+
                 # Apply speed and volume to audio (before mixing with background music or output)
-                speed_factor = 1.2  # 1.2x speed
+                # speed_factor already defined earlier (before subtitle generation)
                 volume_boost = 1.5  # 50% volume increase
                 audio_volume = audio_input.filter('volume', volume_boost)
                 audio_speed = audio_volume.filter('atempo', speed_factor)
