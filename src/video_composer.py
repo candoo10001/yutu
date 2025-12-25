@@ -255,13 +255,21 @@ class VideoComposer:
                     f.write(f"file '{abs_path}'\n")
 
             # Use ffmpeg concat demuxer to concatenate videos
-            # This is faster than re-encoding and maintains quality
+            # Re-encode to ensure smooth transitions and consistent timing
+            # This prevents freezes/delays between clips
             subprocess.run([
                 'ffmpeg',
                 '-f', 'concat',
                 '-safe', '0',
                 '-i', str(concat_list_file),
-                '-c', 'copy',  # Copy codec without re-encoding
+                '-c:v', 'libx264',  # Re-encode video for smooth transitions
+                '-c:a', 'aac',  # Re-encode audio
+                '-pix_fmt', 'yuv420p',
+                '-vsync', 'cfr',  # Constant frame rate for smooth playback
+                '-r', '30',  # Standardize frame rate to 30fps
+                '-preset', 'medium',
+                '-crf', '23',  # Quality setting
+                '-movflags', '+faststart',  # Enable fast start for web playback
                 str(concatenated_video)
             ], check=True, capture_output=True)
 
@@ -386,6 +394,8 @@ class VideoComposer:
                     '-c:v', 'libx264',
                     '-preset', 'medium',
                     '-crf', '23',
+                    '-r', str(fps),  # Set frame rate
+                    '-vsync', 'cfr',  # Constant frame rate
                     '-g', str(fps),  # Keyframe interval = 1 second (force keyframe at start)
                     '-keyint_min', str(fps),  # Minimum keyframe interval
                     '-force_key_frames', 'expr:gte(t,0)',  # Force keyframe at t=0
@@ -402,6 +412,8 @@ class VideoComposer:
                     '-c:v', 'libx264',
                     '-preset', 'medium',
                     '-crf', '23',
+                    '-r', str(fps),  # Set frame rate
+                    '-vsync', 'cfr',  # Constant frame rate
                     '-g', str(fps),  # Keyframe interval = 1 second (force keyframe at start)
                     '-keyint_min', str(fps),  # Minimum keyframe interval
                     '-force_key_frames', 'expr:gte(t,0)',  # Force keyframe at t=0
@@ -581,6 +593,7 @@ class VideoComposer:
                 )
 
                 # Use ffmpeg to create video from image with Ken Burns effect and title overlay
+                # Ensure consistent frame rate and keyframes for smooth concatenation
                 subprocess.run([
                     'ffmpeg',
                     '-loop', '1',
@@ -589,7 +602,11 @@ class VideoComposer:
                     '-t', str(clip_duration),
                     '-pix_fmt', 'yuv420p',
                     '-vf', full_filter,
-                    '-r', str(fps),
+                    '-r', str(fps),  # Set frame rate
+                    '-vsync', 'cfr',  # Constant frame rate
+                    '-g', str(fps),  # Keyframe interval = 1 second (force keyframe at start)
+                    '-keyint_min', str(fps),  # Minimum keyframe interval
+                    '-force_key_frames', 'expr:gte(t,0)',  # Force keyframe at t=0
                     '-preset', 'medium',
                     '-crf', '23',
                     str(clip_output)
@@ -725,7 +742,15 @@ class VideoComposer:
                 # With PlayResY=1920 (full video height), font size needs to be larger for visibility
                 # Font size of 100 with PlayResY=1920 provides good readability on mobile devices
                 # Using Alignment=2 (bottom-center) with MarginV=960 to position in vertical center
+                # FontName: Use system font that supports Korean (Noto Sans CJK on Linux, AppleSDGothicNeo on macOS)
+                import platform
+                if platform.system() == "Darwin":  # macOS
+                    font_name = "AppleSDGothicNeo-Regular"
+                else:  # Linux (Ubuntu) - use Noto Sans CJK which supports Korean
+                    font_name = "Noto Sans CJK KR"
+                
                 subtitle_style = (
+                    f"FontName={font_name},"
                     f"FontSize={self.config.subtitle_font_size},"
                     f"PrimaryColour=&HFFFFFF,"
                     f"BackColour=&H80000000,"
@@ -745,6 +770,9 @@ class VideoComposer:
                 video_input = ffmpeg.input(concatenated_video)
                 audio_input = ffmpeg.input(str(concatenated_audio))
 
+                # Use subtitles filter with force_style to ensure Korean font is used
+                # The subtitles filter requires proper encoding - ensure UTF-8 for Korean characters
+                # Note: charenc parameter is not valid for subtitles filter, encoding is handled by file
                 video_with_subs = video_input.filter('subtitles', str(subtitle_file),
                                                      force_style=subtitle_style)
 
@@ -765,14 +793,16 @@ class VideoComposer:
 
                     # Mix voiceover with background music
                     bgm_input = ffmpeg.input(bgm_path)
+                    
+                    # Apply volume to background music before mixing
+                    bgm_volume = bgm_input.filter('volume', self.config.background_music_volume)
 
                     # Mix audio: voiceover at full volume + background music at reduced volume
                     mixed_audio = ffmpeg.filter(
-                        [audio_input, bgm_input],
+                        [audio_input, bgm_volume],
                         'amix',
                         inputs=2,
-                        duration='shortest',
-                        weights=f'1.0 {self.config.background_music_volume}'
+                        duration='shortest'
                     )
 
                     output = ffmpeg.output(

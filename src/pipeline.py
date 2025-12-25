@@ -274,6 +274,9 @@ class VideoPipeline:
             # Create context summary for better image generation
             context_summary = f"Korean business news about: {korean_article.title}"
 
+            # Track used media files (videos) to prevent duplicates in the same video
+            used_media_paths = set()
+
             for segment in script_segments:
                 # Generate catchy title for this segment
                 segment_title = self.title_generator.generate_title(
@@ -293,10 +296,11 @@ class VideoPipeline:
                 if not image_prompt:
                     raise VideoGenerationError(f"Image prompt generation failed for segment {segment.segment_number}")
 
-                # Try to find pre-defined media first
+                # Try to find pre-defined media first (excluding already-used videos)
                 image_path = self.media_matcher.find_matching_media(
                     text=segment.text,
-                    title=segment_title
+                    title=segment_title,
+                    used_media=used_media_paths
                 )
 
                 # If no pre-defined media found, generate new image
@@ -354,6 +358,15 @@ class VideoPipeline:
                         segment_number=segment.segment_number,
                         media_path=image_path
                     )
+                    # Track used video files (not images, as images can be reused)
+                    media_path_obj = Path(image_path).resolve()
+                    if media_path_obj.suffix.lower() in ['.mp4', '.mov', '.avi']:
+                        used_media_paths.add(str(media_path_obj))
+                        self.logger.debug(
+                            "tracking_used_video",
+                            video_path=str(media_path_obj),
+                            total_used=len(used_media_paths)
+                        )
 
                 if not image_path or not Path(image_path).exists():
                     raise VideoGenerationError(f"Image/media acquisition failed for segment {segment.segment_number}")

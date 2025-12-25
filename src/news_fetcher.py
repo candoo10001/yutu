@@ -3,7 +3,7 @@ News API integration for fetching business/finance news.
 """
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import structlog
@@ -79,18 +79,26 @@ class NewsFetcher:
             )
 
         try:
+            # Calculate date for last 24 hours (more flexible than strict "today")
+            # News API allows up to 1 month back for free tier, but we want recent articles
+            # Use yesterday's date to ensure we get articles from last 24 hours
+            yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+            from_date = yesterday.strftime('%Y-%m-%d')
+            # News API expects date in YYYY-MM-DD format
+            
             # If keyword is provided, use everything endpoint with business/finance focus
             if keyword:
-                # Search for the keyword - we'll filter for business relevance in _filter_articles
+                # Search for the keyword - filter for recent articles (last 24 hours)
                 # News API's q parameter does simple keyword matching
                 response = self.client.get_everything(
                     q=keyword,
                     language='en',
-                    sort_by='relevancy',  # Sort by relevance instead of date for better keyword matches
+                    from_param=from_date,  # Fetch articles from last 24 hours
+                    sort_by='publishedAt',  # Sort by date (most recent first) for latest articles
                     page_size=min(self.config.max_news_articles * 4, 100)  # Fetch more for better filtering
                 )
             else:
-                # Fetch top headlines
+                # Fetch top headlines (already returns latest by default)
                 response = self.client.get_top_headlines(
                     category=self.config.news_category,
                     country=self.config.news_country,
@@ -118,9 +126,12 @@ class NewsFetcher:
             # Convert to NewsArticle instances
             news_articles = self._parse_articles(articles)
 
-            # Filter and rank articles
+            # Filter and rank articles first (before date filtering)
             news_articles = self._filter_articles(news_articles, keyword=keyword)
             news_articles = self._rank_articles(news_articles, keyword=keyword)
+            
+            # Filter articles to prioritize recent ones (last 3 days), but keep all if none are recent
+            news_articles = self._filter_recent_articles(news_articles)
 
             # Limit to max_news_articles
             news_articles = news_articles[:self.config.max_news_articles]
@@ -213,6 +224,57 @@ class NewsFetcher:
                 continue
 
         return articles
+
+    def _filter_recent_articles(self, articles: List[NewsArticle]) -> List[NewsArticle]:
+        """
+        Filter articles to prioritize recent ones (last 3 days), but keep all if none are recent.
+        This ensures we always have articles to work with while prioritizing the latest.
+
+        Args:
+            articles: List of NewsArticle instances (already sorted by relevance/date)
+
+        Returns:
+            Filtered list prioritizing recent articles, but keeping all if none are recent
+        """
+        if not articles:
+            return articles
+            
+        now = datetime.now(timezone.utc)
+        # Allow articles from the last 3 days (72 hours) - more flexible
+        cutoff_time = now - timedelta(days=3)
+        
+        recent_articles = []
+        older_articles = []
+        
+        for article in articles:
+            # Check if article was published within the last 3 days
+            if article.published_at >= cutoff_time:
+                recent_articles.append(article)
+            else:
+                days_old = (now - article.published_at).days
+                older_articles.append((article, days_old))
+        
+        # Prioritize recent articles, but if we have no recent articles, use the oldest ones
+        if recent_articles:
+            self.logger.info(
+                "prioritizing_recent_articles",
+                total_articles=len(articles),
+                recent_articles=len(recent_articles),
+                older_articles=len(older_articles),
+                cutoff_days=3
+            )
+            return recent_articles
+        else:
+            # No recent articles found - use the most recent of the older ones (already sorted)
+            # Take the top articles regardless of age
+            self.logger.warning(
+                "no_recent_articles_found",
+                total_articles=len(articles),
+                using_oldest_available=True,
+                oldest_article_days=older_articles[0][1] if older_articles else 0
+            )
+            # Return the most recent articles we have (already sorted by _rank_articles)
+            return articles[:self.config.max_news_articles]
 
     def _filter_articles(self, articles: List[NewsArticle], keyword: Optional[str] = None) -> List[NewsArticle]:
         """

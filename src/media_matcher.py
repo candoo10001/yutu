@@ -234,17 +234,22 @@ class MediaMatcher:
             '기후변화': ['environment'],  # Climate change in Korean
         }
 
-    def find_matching_media(self, text: str, title: str = "") -> Optional[str]:
+    def find_matching_media(self, text: str, title: str = "", used_media: Optional[set] = None) -> Optional[str]:
         """
         Find a pre-defined media file that matches the segment content.
+        Excludes already-used videos to prevent duplicates in the same video.
 
         Args:
             text: Segment text to analyze
             title: Segment title (optional, for additional context)
+            used_media: Set of already-used media file paths (absolute paths) to exclude
 
         Returns:
-            Path to matching media file, or None if no match found
+            Path to matching media file, or None if no match found or all matching videos already used
         """
+        if used_media is None:
+            used_media = set()
+        
         # Combine text and title for keyword extraction
         combined_text = f"{title} {text}".lower()
 
@@ -261,25 +266,58 @@ class MediaMatcher:
 
         # Search for media files in matched folders
         media_files = []
+        video_files = []
+        image_files = []
+        
         for folder in matched_folders:
             folder_path = self.media_dir / folder
             if folder_path.exists() and folder_path.is_dir():
                 # Support images and videos
                 for ext in ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.mp4', '*.mov', '*.avi']:
-                    media_files.extend(folder_path.glob(ext))
+                    files = list(folder_path.glob(ext))
+                    media_files.extend(files)
+                    # Separate videos from images
+                    for f in files:
+                        if f.suffix.lower() in ['.mp4', '.mov', '.avi']:
+                            video_files.append(f)
+                        else:
+                            image_files.append(f)
 
         if not media_files:
             self.logger.debug("no_media_files_found", folders=list(matched_folders))
             return None
 
-        # Randomly select one of the matching files
-        selected_file = random.choice(media_files)
+        # Convert used_media to absolute Path objects for comparison
+        used_media_paths = {Path(p).resolve() for p in used_media}
+
+        # Filter out already-used videos (but allow images to be reused)
+        available_videos = [f for f in video_files if f.resolve() not in used_media_paths]
+        available_images = image_files  # Images can be reused
+        
+        # Prioritize unused videos, but allow images if no videos available
+        available_media = available_videos if available_videos else available_images
+
+        if not available_media:
+            # All matching videos have been used - return None to trigger image generation
+            self.logger.info(
+                "all_matching_videos_already_used",
+                matched_keywords=list(matched_folders),
+                total_matches=len(media_files),
+                used_count=len([f for f in video_files if f.resolve() in used_media_paths]),
+                action="will_generate_image_instead"
+            )
+            return None
+
+        # Randomly select one of the available files
+        selected_file = random.choice(available_media)
 
         self.logger.info(
             "predefined_media_matched",
             matched_keywords=list(matched_folders),
             selected_file=str(selected_file),
-            total_matches=len(media_files)
+            total_matches=len(media_files),
+            available_matches=len(available_media),
+            is_video=selected_file.suffix.lower() in ['.mp4', '.mov', '.avi']
         )
 
         return str(selected_file)
