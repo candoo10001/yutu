@@ -23,8 +23,8 @@ class Config:
     news_api_key: str
     claude_api_key: str
     google_api_key: str
-    kling_access_key: str
-    kling_secret_key: str
+    kling_access_key: Optional[str] = None
+    kling_secret_key: Optional[str] = None
     elevenlabs_api_key: str
 
     # News API Settings
@@ -84,8 +84,6 @@ class Config:
             "NEWS_API_KEY": "news_api_key",
             "CLAUDE_API_KEY": "claude_api_key",
             "GOOGLE_API_KEY": "google_api_key",
-            "KLING_ACCESS_KEY": "kling_access_key",
-            "KLING_SECRET_KEY": "kling_secret_key",
             "ELEVENLABS_API_KEY": "elevenlabs_api_key",
         }
 
@@ -100,6 +98,10 @@ class Config:
                     missing_key=env_key
                 )
             config_dict[config_key] = value
+
+        # Optional Kling keys (for legacy support, but no longer required)
+        config_dict["kling_access_key"] = os.getenv("KLING_ACCESS_KEY")
+        config_dict["kling_secret_key"] = os.getenv("KLING_SECRET_KEY")
 
         # Optional settings with defaults
         config_dict.update({
