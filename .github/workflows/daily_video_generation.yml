@@ -13,7 +13,8 @@ jobs:
   generate-video:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: production
+    # Uncomment and set to your environment name if using environment secrets
+    # environment: production
     
     permissions:
       contents: read
@@ -44,30 +45,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Verify Environment Secrets
-        run: |
-          echo "Checking if secrets are accessible..."
-          if [ -z "${{ secrets.NEWS_API_KEY }}" ]; then
-            echo "❌ NEWS_API_KEY is empty or not set"
-          else
-            echo "✅ NEWS_API_KEY is set (length: ${#{{ secrets.NEWS_API_KEY }}})"
-          fi
-          if [ -z "${{ secrets.CLAUDE_API_KEY }}" ]; then
-            echo "❌ CLAUDE_API_KEY is empty or not set"
-          else
-            echo "✅ CLAUDE_API_KEY is set"
-          fi
-          if [ -z "${{ secrets.GOOGLE_API_KEY }}" ]; then
-            echo "❌ GOOGLE_API_KEY is empty or not set"
-          else
-            echo "✅ GOOGLE_API_KEY is set"
-          fi
-          if [ -z "${{ secrets.ELEVENLABS_API_KEY }}" ]; then
-            echo "❌ ELEVENLABS_API_KEY is empty or not set"
-          else
-            echo "✅ ELEVENLABS_API_KEY is set"
-          fi
-
       - name: Generate Daily Video
         env:
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
@@ -76,11 +53,32 @@ jobs:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           LOG_LEVEL: INFO
         run: |
-          echo "Environment variables check:"
-          echo "NEWS_API_KEY is set: $([ -z "$NEWS_API_KEY" ] && echo 'NO' || echo 'YES')"
-          echo "CLAUDE_API_KEY is set: $([ -z "$CLAUDE_API_KEY" ] && echo 'NO' || echo 'YES')"
-          echo "GOOGLE_API_KEY is set: $([ -z "$GOOGLE_API_KEY" ] && echo 'NO' || echo 'YES')"
-          echo "ELEVENLABS_API_KEY is set: $([ -z "$ELEVENLABS_API_KEY" ] && echo 'NO' || echo 'YES')"
+          echo "Checking environment variables..."
+          if [ -z "$NEWS_API_KEY" ]; then
+            echo "❌ ERROR: NEWS_API_KEY is not set"
+            exit 1
+          else
+            echo "✅ NEWS_API_KEY is set"
+          fi
+          if [ -z "$CLAUDE_API_KEY" ]; then
+            echo "❌ ERROR: CLAUDE_API_KEY is not set"
+            exit 1
+          else
+            echo "✅ CLAUDE_API_KEY is set"
+          fi
+          if [ -z "$GOOGLE_API_KEY" ]; then
+            echo "❌ ERROR: GOOGLE_API_KEY is not set"
+            exit 1
+          else
+            echo "✅ GOOGLE_API_KEY is set"
+          fi
+          if [ -z "$ELEVENLABS_API_KEY" ]; then
+            echo "❌ ERROR: ELEVENLABS_API_KEY is not set"
+            exit 1
+          else
+            echo "✅ ELEVENLABS_API_KEY is set"
+          fi
+          echo "All environment variables are set. Running main.py..."
           python main.py
 
       - name: Upload to YouTube
