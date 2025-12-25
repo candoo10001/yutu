@@ -286,7 +286,7 @@ class NewsFetcher:
                         keyword=keyword,
                         title=article.title[:50]
                     )
-                    continue
+                continue
 
             filtered.append(article)
 

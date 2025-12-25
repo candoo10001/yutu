@@ -119,7 +119,26 @@ class YouTubeAuthHelper:
         )
 
         # Run local server for OAuth on specified port
-        creds = flow.run_local_server(port=port, open_browser=True)
+        # Use prompt='consent' and access_type='offline' to force refresh token
+        creds = flow.run_local_server(
+            port=port, 
+            open_browser=True,
+            authorization_prompt_message='Please visit this URL to authorize this application: {url}',
+            success_message='The authentication flow has completed. You may close this window.',
+            # Force consent screen to get refresh token
+            prompt='consent'
+        )
+
+        # Check if we got a refresh token
+        if not creds.refresh_token:
+            raise ValueError(
+                "No refresh token received. This usually means:\n"
+                "1. You've already authorized this app before (Google doesn't return refresh token again)\n"
+                "2. The OAuth consent screen needs configuration\n"
+                "Solution: Go to Google Cloud Console → APIs & Services → OAuth consent screen\n"
+                "Make sure your account is added as a test user if the app is in testing mode.\n"
+                "Or revoke access first: https://myaccount.google.com/permissions"
+            )
 
         return creds.refresh_token
 
