@@ -53,19 +53,12 @@ jobs:
 
       - name: Generate Daily Video
         env:
-          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
           CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           LOG_LEVEL: INFO
         run: |
           echo "Checking environment variables..."
-          if [ -z "$NEWS_API_KEY" ]; then
-            echo "❌ ERROR: NEWS_API_KEY is not set"
-            exit 1
-          else
-            echo "✅ NEWS_API_KEY is set"
-          fi
           if [ -z "$CLAUDE_API_KEY" ]; then
             echo "❌ ERROR: CLAUDE_API_KEY is not set"
             exit 1
@@ -85,6 +78,7 @@ jobs:
             echo "✅ ELEVENLABS_API_KEY is set"
           fi
           echo "All environment variables are set. Running main.py..."
+          echo "Using Gemini with Google Search for news fetching..."
           python main.py
 
       - name: Upload to YouTube

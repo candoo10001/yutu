@@ -542,10 +542,13 @@ class VideoComposer:
             # Step 1: Create video clips for each image with its duration
             video_clips = []
 
+            # Define audio speed factor (used throughout video composition)
+            speed_factor = 1.2  # 1.2x speed for Korean TTS
+
             for i, segment in enumerate(segments_data):
-                # Add 1.5 second padding to the last segment to prevent cutoff
-                is_last_segment = (i == len(segments_data) - 1)
-                clip_duration = segment['audio_duration'] + (1.5 if is_last_segment else 0.0)
+                # Adjust clip duration to match sped-up audio
+                # When audio is sped up by 1.2x, actual duration is original_duration / 1.2
+                clip_duration = segment['audio_duration'] / speed_factor
 
                 media_path = segment['image_path']  # Could be image or video
                 clip_output = output_path / f"clip_{i}_{timestamp}.mp4"
@@ -732,10 +735,8 @@ class VideoComposer:
 
             audio_list_file.unlink()  # Clean up
 
-            # Define audio speed factor (used for both audio processing and subtitle timing)
-            speed_factor = 1.2  # 1.2x speed
-
             # Step 4: Create subtitle file (SRT format) with word-by-word timing
+            # Note: speed_factor is already defined earlier when creating video clips
             # Adjust subtitle timing to match sped-up audio (divide by speed_factor)
             if self.config.enable_subtitles:
                 self.logger.info("creating_subtitle_file", speed_factor=speed_factor)
@@ -885,9 +886,9 @@ class VideoComposer:
                     from .background_music_generator import BackgroundMusicGenerator
                     bgm_generator = BackgroundMusicGenerator(self.config, self.logger)
 
-                    # Get total audio duration + padding for last segment
+                    # Get total audio duration (no padding needed)
                     # Note: Background music uses original duration (not speeded up like voiceover)
-                    total_audio_duration = sum(seg['audio_duration'] for seg in segments_data) + 1.5
+                    total_audio_duration = sum(seg['audio_duration'] for seg in segments_data)
                     
                     try:
                         bgm_path = bgm_generator.generate_background_music(

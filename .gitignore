@@ -4,7 +4,7 @@
 .env.*.local
 
 # Output files
-output/
+output/*
 logs/
 *.log
 

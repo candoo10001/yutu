@@ -17,3 +17,4 @@ echo "  cd /Users/hae/Documents/Vidmore"
 echo "  git remote set-url origin git@github.com:candoo10001/yutu.git"
 echo "  git push -u origin main"
 
+

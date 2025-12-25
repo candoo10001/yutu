@@ -57,3 +57,4 @@ Your SSH key exists at `~/.ssh/id_ed25519.pub` but isn't added to GitHub yet.
 ✅ SSH key exists: `~/.ssh/id_ed25519.pub`  
 ❌ SSH key not added to GitHub yet
 
+

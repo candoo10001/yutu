@@ -21,10 +21,12 @@ class Config:
     """Configuration settings for the video generation pipeline."""
 
     # API Keys (required)
-    news_api_key: str
     claude_api_key: str
     google_api_key: str
     elevenlabs_api_key: str
+
+    # API Keys (optional - not used with Gemini news fetcher)
+    news_api_key: Optional[str] = None
     
     # API Keys (optional)
     kling_access_key: Optional[str] = None
@@ -41,7 +43,7 @@ class Config:
     claude_temperature: float = 0.7
 
     # Video Settings
-    video_duration: int = 30  # Target duration for final video
+    video_duration: int = 60  # Target duration for final video (1 minute with enriched insights)
     segment_duration: int = 4  # Duration for each image segment (3-5 seconds)
     video_aspect_ratio: str = "9:16"  # Portrait for YouTube Shorts
     video_resolution: str = "1080p"
@@ -82,9 +84,8 @@ class Config:
         Raises:
             ConfigurationError: If required environment variables are missing
         """
-        # Required API keys
+        # Required API keys (using Gemini for news, no News API needed)
         required_keys = {
-            "NEWS_API_KEY": "news_api_key",
             "CLAUDE_API_KEY": "claude_api_key",
             "GOOGLE_API_KEY": "google_api_key",
             "ELEVENLABS_API_KEY": "elevenlabs_api_key",
@@ -101,6 +102,9 @@ class Config:
                     missing_key=env_key
                 )
             config_dict[config_key] = value
+
+        # Optional keys (legacy News API support)
+        config_dict["news_api_key"] = os.getenv("NEWS_API_KEY")
 
         # Optional Kling keys (for legacy support, but no longer required)
         config_dict["kling_access_key"] = os.getenv("KLING_ACCESS_KEY")

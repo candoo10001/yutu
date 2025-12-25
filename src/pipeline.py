@@ -11,9 +11,8 @@ from typing import Optional
 import structlog
 
 from .config import Config
-from .news_fetcher import NewsFetcher
-from .translator import Translator
-from .script_generator import ScriptGenerator
+from .gemini_news_fetcher import GeminiNewsFetcher
+from .gemini_script_generator import GeminiScriptGenerator
 from .script_segmenter import ScriptSegmenter
 from .segment_image_prompt_generator import SegmentImagePromptGenerator
 from .title_generator import TitleGenerator
@@ -76,9 +75,8 @@ class VideoPipeline:
         )
 
         # Initialize components
-        self.news_fetcher = NewsFetcher(config, self.logger)
-        self.translator = Translator(config, self.logger)
-        self.script_generator = ScriptGenerator(config, self.logger)
+        self.news_fetcher = GeminiNewsFetcher(config, self.logger)
+        self.script_generator = GeminiScriptGenerator(config, self.logger)
         self.script_segmenter = ScriptSegmenter(config, self.logger)
         self.image_prompt_generator = SegmentImagePromptGenerator(config, self.logger)
         self.title_generator = TitleGenerator(config, self.logger)
@@ -125,7 +123,7 @@ class VideoPipeline:
         self.logger.info("pipeline_started", mode="YouTube Shorts Generation (Keyword)", keyword=keyword)
 
         try:
-            # Step 1: Fetch top business news from News API with keyword
+            # Step 1: Fetch top business news using Gemini with Google Search
             self.logger.info("step_1_fetch_news_with_keyword", keyword=keyword)
             news_articles = self.news_fetcher.fetch_top_business_news(keyword=keyword)
 
@@ -235,21 +233,12 @@ class VideoPipeline:
         steps_completed = []
 
         try:
-            # Step 2: Translate to Korean
-            self.logger.info("translating_article", article_index=article_index)
-            korean_articles = self.translator.translate_to_korean([article])
-
-            if not korean_articles or len(korean_articles) == 0:
-                raise VideoGenerationError("Translation failed")
-
-            korean_article = korean_articles[0]
-            steps_completed.append("translate")
-
-            # Step 3: Generate Korean narration script
-            self.logger.info("generating_script", article_index=article_index)
+            # Step 2: Generate Korean narration script using Gemini with Google Search
+            # Gemini searches Korean sources and generates natural Korean script directly
+            self.logger.info("generating_korean_script_with_gemini", article_index=article_index)
             target_video_duration = self.config.video_duration
             korean_script = self.script_generator.generate_korean_script(
-                [korean_article],
+                [article],
                 target_duration=target_video_duration
             )
 
@@ -258,7 +247,7 @@ class VideoPipeline:
 
             steps_completed.append("generate_script")
 
-            # Step 4: Segment script into timed chunks
+            # Step 3: Segment script into timed chunks
             self.logger.info("segmenting_script", article_index=article_index)
             script_segments = self.script_segmenter.segment_script(korean_script)
 
@@ -267,12 +256,12 @@ class VideoPipeline:
 
             steps_completed.append("segment_script")
 
-            # Step 5: Generate content for each segment (images and audio)
+            # Step 4: Generate content for each segment (images and audio)
             self.logger.info("generating_segment_content", article_index=article_index)
             segments_data = []
 
             # Create context summary for better image generation
-            context_summary = f"Korean business news about: {korean_article.title}"
+            context_summary = f"Business news about: {article.title}"
 
             # Track used media files (videos) to prevent duplicates in the same video
             used_media_paths = set()
@@ -394,7 +383,7 @@ class VideoPipeline:
 
             steps_completed.append("generate_segment_content")
 
-            # Step 6: Create slideshow video with subtitles
+            # Step 5: Create slideshow video with subtitles
             self.logger.info("creating_slideshow", article_index=article_index)
             final_video_path = self.video_composer.create_slideshow_with_subtitles(
                 segments_data=segments_data,
@@ -406,18 +395,17 @@ class VideoPipeline:
 
             steps_completed.append("create_slideshow")
 
-            # Step 7: Generate Korean title for YouTube
+            # Step 6: Generate Korean title for YouTube
             self.logger.info("generating_korean_title", article_index=article_index)
-            korean_title = self._generate_korean_title(korean_script, korean_article)
+            korean_title = self._generate_korean_title(korean_script, article)
             if not korean_title:
                 # Fallback: extract from script
                 korean_title = self._extract_title_from_script(korean_script)
 
-            # Step 8: Save metadata
+            # Step 7: Save metadata
             self.logger.info("saving_metadata", article_index=article_index)
             metadata = self._create_metadata_single_article(
                 article=article,
-                korean_article=korean_article,
                 korean_script=korean_script,
                 script_segments=script_segments,
                 segments_data=segments_data,
@@ -448,14 +436,14 @@ class VideoPipeline:
                 steps_completed=steps_completed
             )
 
-    def _generate_korean_title(self, korean_script: str, korean_article) -> str:
+    def _generate_korean_title(self, korean_script: str, article) -> str:
         """
         Generate a Korean title for YouTube from the Korean script using Gemini API.
-        
+
         Args:
             korean_script: Korean narration script
-            korean_article: Korean article object
-            
+            article: News article object
+
         Returns:
             Korean title string
         """
@@ -524,7 +512,6 @@ Output ONLY the title, nothing else. No quotes, no explanations."""
     def _create_metadata_single_article(
         self,
         article,
-        korean_article,
         korean_script: str,
         script_segments: list,
         segments_data: list,
@@ -559,11 +546,6 @@ Output ONLY the title, nothing else. No quotes, no explanations."""
                 "source": article.source,
                 "published_at": article.published_at.isoformat()
             },
-            "korean_article": {
-                "title": korean_article.title,
-                "description": korean_article.description,
-                "source": korean_article.source
-            },
             "korean_script": korean_script,
             "segments": [
                 {
@@ -577,7 +559,7 @@ Output ONLY the title, nothing else. No quotes, no explanations."""
             "final_video_path": final_video_path,
             "title": korean_title or "오늘의 뉴스",  # Korean title for YouTube
             "description": korean_script[:500] if korean_script else "",  # Korean description
-            "generation_method": "Image slideshow with Gemini 2.5 Flash Image + ElevenLabs audio + subtitles + background music"
+            "generation_method": "Gemini native Korean script generation with Google Search + Imagen + ElevenLabs audio + subtitles + background music"
         }
 
     def _save_metadata(self, metadata: dict) -> str:

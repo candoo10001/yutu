@@ -2,13 +2,13 @@
 Script generation module using Claude API to create Korean narration scripts.
 """
 import time
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 import anthropic
 import structlog
 
 from .config import Config
-from .translator import KoreanArticle
+from .news_fetcher import NewsArticle
 from .utils.error_handler import ClaudeAPIError, ScriptGenerationError
 from .utils.logger import log_api_call, log_api_response, log_error
 
@@ -28,13 +28,19 @@ class ScriptGenerator:
         self.logger = logger or structlog.get_logger()
         self.client = anthropic.Anthropic(api_key=config.claude_api_key)
 
-    def generate_korean_script(self, korean_articles: List[KoreanArticle], target_duration: Optional[int] = None) -> str:
+    def generate_korean_script(
+        self,
+        news_articles: List[NewsArticle],
+        target_duration: Optional[int] = None,
+        enriched_context: Optional[Dict[str, Any]] = None
+    ) -> str:
         """
-        Generate a Korean narration script from translated articles.
+        Generate a Korean narration script directly from English news articles with enriched context.
 
         Args:
-            korean_articles: List of KoreanArticle instances
+            news_articles: List of NewsArticle instances (English)
             target_duration: Target duration in seconds (defaults to config.video_duration)
+            enriched_context: Optional enriched context with background, insights, competitors, market_impact
 
         Returns:
             Korean narration script (string)
@@ -42,7 +48,7 @@ class ScriptGenerator:
         Raises:
             ScriptGenerationError: If script generation fails
         """
-        if not korean_articles:
+        if not news_articles:
             raise ScriptGenerationError("No articles provided for script generation")
 
         # Use provided target_duration or default to config value
@@ -54,16 +60,16 @@ class ScriptGenerator:
             self.logger,
             "Claude API",
             "generate_korean_script",
-            article_count=len(korean_articles),
+            article_count=len(news_articles),
             target_duration=duration
         )
 
         try:
             # Format articles for script generation
-            articles_text = self._format_articles_for_script(korean_articles)
+            articles_text = self._format_articles_for_script(news_articles)
 
-            # Create script generation prompt with target duration
-            prompt = self._create_script_prompt(articles_text, duration)
+            # Create script generation prompt with target duration and enriched context
+            prompt = self._create_script_prompt(articles_text, duration, enriched_context)
 
             # Call Claude API with Haiku (cheaper model)
             response = self.client.messages.create(
@@ -119,12 +125,12 @@ class ScriptGenerator:
             log_error(self.logger, e, "script_generator.generate_korean_script")
             raise ScriptGenerationError(f"Script generation failed: {str(e)}")
 
-    def _format_articles_for_script(self, articles: List[KoreanArticle]) -> str:
+    def _format_articles_for_script(self, articles: List[NewsArticle]) -> str:
         """
-        Format Korean articles into a structured text for script generation.
+        Format English news articles into a structured text for Korean script generation.
 
         Args:
-            articles: List of KoreanArticle instances
+            articles: List of NewsArticle instances (English)
 
         Returns:
             Formatted articles text
@@ -138,40 +144,69 @@ class ScriptGenerator:
 
         return "\n".join(formatted)
 
-    def _create_script_prompt(self, articles_text: str, target_duration: int) -> str:
+    def _create_script_prompt(
+        self,
+        articles_text: str,
+        target_duration: int,
+        enriched_context: Optional[Dict[str, Any]] = None
+    ) -> str:
         """
-        Create a script generation prompt for Claude.
+        Create a script generation prompt for Claude with enriched context.
 
         Args:
             articles_text: Formatted Korean articles text
             target_duration: Target duration in seconds
+            enriched_context: Optional enriched context with additional insights
 
         Returns:
             Script generation prompt
         """
-        return f"""당신은 전문 뉴스 앵커입니다. 다음 비즈니스/금융 뉴스 기사에 대해서만 정확히 {target_duration}초 분량의 자연스러운 한국어 나레이션 스크립트를 작성해주세요.
+        # Build additional context section if enriched_context is provided
+        additional_context = ""
+        if enriched_context:
+            context_parts = []
+            if enriched_context.get("background"):
+                context_parts.append(f"**배경:** {enriched_context['background']}")
+            if enriched_context.get("insights"):
+                context_parts.append(f"**핵심 인사이트:** {enriched_context['insights']}")
+            if enriched_context.get("competitors"):
+                context_parts.append(f"**경쟁 상황:** {enriched_context['competitors']}")
+            if enriched_context.get("market_impact"):
+                context_parts.append(f"**시장 영향:** {enriched_context['market_impact']}")
 
-**중요: 이 뉴스 기사 하나에만 집중하세요. 다른 뉴스나 다른 주제를 언급하지 마세요.**
+            if context_parts:
+                additional_context = "\n\n**추가 컨텍스트 (스크립트에 포함할 것):**\n" + "\n".join(context_parts)
 
-뉴스 기사:
+        return f"""You are a professional news anchor. Create a natural Korean narration script for the following business/finance news article.
+
+**CRITICAL RULES:**
+1. Input is in English, output MUST be in natural, native Korean (not translated Korean)
+2. NO opening greetings or introductions (NO "안녕하십니까", NO "오늘은", NO "말씀드리겠습니다")
+3. Start IMMEDIATELY with the news content
+4. Write as a native Korean speaker would speak, not as a translation
+
+**News Article (English):**
 {articles_text}
+{additional_context}
 
-중요: 스크립트는 반드시 {target_duration}초 분량이어야 합니다.
-- 목표 단어 수: {int(target_duration * 4.5)}-{int(target_duration * 5)} 단어 (한국어 TTS 기준)
-- 이 길이를 정확히 맞추는 것이 매우 중요합니다
+**Script Requirements:**
+- **Duration**: EXACTLY {target_duration} seconds
+- **Word count**: {int(target_duration * 4.5)}-{int(target_duration * 5)} Korean words (based on Korean TTS speed)
+- **Length is CRITICAL** - must match exactly
 
-스크립트 작성 지침:
-1. **필수**: 정확히 {target_duration}초 분량 ({int(target_duration * 4.5)}-{int(target_duration * 5)} 단어)
-2. **오프닝**: 바로 본론으로 들어가세요
-3. 뉴스 앵커가 읽기에 자연스러운 구어체로 작성하세요
-4. **가장 중요**: 제공된 뉴스 기사 하나에만 집중하세요
-   - 기사 제목에 나온 주제/기업 하나에만 집중
-   - 다른 뉴스, 다른 기업, 다른 주제를 절대 언급하지 마세요
-   - 기사 제목에 없는 주제나 내용을 추가하지 마세요
-   - 예시: 제목이 "Tesla 주가 상승"이면 Tesla에만 집중. Apple, Nvidia 등 다른 기업은 언급 금지
-5. 기사 제목과 설명에 나온 내용만 포함하세요
-6. 전문적이면서도 접근하기 쉬운 톤을 유지하세요
-7. **클로징 (필수)**: 반드시 "지금까지 주식하는 두남자였습니다. 감사합니다"로 끝내세요
+**Content Structure:**
+1. **NO opening** - Start directly with the main news
+2. **Natural Korean**: Write as a native Korean speaker, not a translator
+   - Use natural Korean sentence structures
+   - Use appropriate Korean business/financial terms
+   - Numbers should be written naturally (e.g., "2026년" not "이천이십육년")
+   - Dates: Use "이천이십육년" → "2026년"
+3. **Content flow**:
+   - Lead with the main news headline
+   - Include enriched context naturally (background, insights, competition, market impact)
+   - Focus ONLY on this single news topic - no other news or topics
+4. **Tone**: Professional yet accessible, conversational
+5. **MANDATORY closing**: End with exactly "지금까지 주식하는 두남자였습니다. 감사합니다"
 
 **TTS 음성 합성을 위한 필수 규칙**:
 7. 모든 숫자를 한글로 음성 그대로 작성하세요:
