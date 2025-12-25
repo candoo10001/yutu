@@ -91,7 +91,7 @@ jobs:
           # Find the generated metadata file
           METADATA_FILE=$(ls -t output/metadata_*.json | head -1)
           if [ -f "$METADATA_FILE" ]; then
-            python src/youtube_uploader.py "$METADATA_FILE"
+            python -m src.youtube_uploader "$METADATA_FILE"
           else
             echo "No metadata file found, skipping YouTube upload"
           fi
