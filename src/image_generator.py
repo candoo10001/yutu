@@ -143,6 +143,19 @@ class ImageGenerator:
                         if blocking_ratings:
                             error_msg += f": {blocking_ratings}"
                         raise VideoGenerationError(error_msg)
+                    elif finish_reason == "NO_IMAGE":
+                        # API couldn't generate an image - prompt may be too complex, inappropriate, or API issue
+                        self.logger.warning(
+                            "candidate_finish_reason_no_image",
+                            finish_reason=finish_reason,
+                            candidate_keys=list(candidate.keys()),
+                            prompt_preview=enhanced_prompt[:200]
+                        )
+                        raise VideoGenerationError(
+                            f"Image generation failed (finishReason: NO_IMAGE). "
+                            f"The prompt may be too complex, inappropriate, or the API couldn't generate an image. "
+                            f"Try simplifying the prompt or using predefined media."
+                        )
                     elif finish_reason == "OTHER":
                         self.logger.warning(
                             "candidate_finish_reason_other",
