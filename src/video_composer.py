@@ -9,7 +9,7 @@ import ffmpeg
 import structlog
 
 from .config import Config
-from .utils.error_handler import VideoCompositionError
+from .utils.error_handler import VideoCompositionError, VideoGenerationError
 from .utils.logger import log_error
 
 
@@ -366,16 +366,27 @@ class VideoComposer:
                 will_loop=video_duration < target_duration
             )
 
-            # Prepare title overlay (same as images)
+            # Prepare title overlay with Korean font support (cross-platform)
+            import platform
+            if platform.system() == "Darwin":  # macOS
+                font_path = "/System/Library/Fonts/AppleSDGothicNeo.ttc"
+                font_name = "AppleSDGothicNeo-Regular"
+            else:  # Linux (Ubuntu) - use Noto Sans CJK
+                font_path = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+                font_name = "Noto Sans CJK KR"
+            
+            # Escape single quotes in title text for ffmpeg
+            escaped_title = segment_title.replace("'", "'\\''")
+            
             title_filter = (
                 f"drawbox=y=0:color=black@0.8:width={width}:height=140:t=fill,"
-                f"drawtext=text='{segment_title}':fontfile=/System/Library/Fonts/AppleSDGothicNeo.ttc:"
+                f"drawtext=text='{escaped_title}':fontfile={font_path}:"
                 f"fontsize=56:fontcolor=yellow@0.3:x=(w-text_w)/2:y=38:borderw=0,"
-                f"drawtext=text='{segment_title}':fontfile=/System/Library/Fonts/AppleSDGothicNeo.ttc:"
+                f"drawtext=text='{escaped_title}':fontfile={font_path}:"
                 f"fontsize=56:fontcolor=yellow@0.2:x=(w-text_w)/2:y=36:borderw=0,"
-                f"drawtext=text='{segment_title}':fontfile=/System/Library/Fonts/AppleSDGothicNeo.ttc:"
+                f"drawtext=text='{escaped_title}':fontfile={font_path}:"
                 f"fontsize=56:fontcolor=white:x=(w-text_w)/2:y=42:borderw=4:bordercolor=black@0.8,"
-                f"drawtext=text='{segment_title}':fontfile=/System/Library/Fonts/AppleSDGothicNeo.ttc:"
+                f"drawtext=text='{escaped_title}':fontfile={font_path}:"
                 f"fontsize=56:fontcolor=white:x=(w-text_w)/2:y=40"
             )
 
@@ -567,20 +578,31 @@ class VideoComposer:
                 ken_burns = movement_patterns[i % len(movement_patterns)]
 
                 # Enhanced title overlay with gradient background and glow effect
-                # Using AppleSDGothicNeo - a modern Korean font that supports Hangul characters
+                # Prepare title overlay with Korean font support (cross-platform)
+                import platform
+                if platform.system() == "Darwin":  # macOS
+                    font_path = "/System/Library/Fonts/AppleSDGothicNeo.ttc"
+                    font_name = "AppleSDGothicNeo-Regular"
+                else:  # Linux (Ubuntu) - use Noto Sans CJK
+                    font_path = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+                    font_name = "Noto Sans CJK KR"
+                
+                # Escape single quotes in title text for ffmpeg
+                escaped_title = segment_title.replace("'", "'\\''")
+                
                 title_filter = (
                     # Gradient background bar (dark to transparent)
                     f"drawbox=y=0:color=black@0.8:width={width}:height=140:t=fill,"
                     # Outer glow effect (multiple layers for smooth glow)
-                    f"drawtext=text='{segment_title}':fontfile=/System/Library/Fonts/AppleSDGothicNeo.ttc:"
+                    f"drawtext=text='{escaped_title}':fontfile={font_path}:"
                     f"fontsize=56:fontcolor=yellow@0.3:x=(w-text_w)/2:y=38:borderw=0,"
-                    f"drawtext=text='{segment_title}':fontfile=/System/Library/Fonts/AppleSDGothicNeo.ttc:"
+                    f"drawtext=text='{escaped_title}':fontfile={font_path}:"
                     f"fontsize=56:fontcolor=yellow@0.2:x=(w-text_w)/2:y=36:borderw=0,"
                     # Main text with bold outline
-                    f"drawtext=text='{segment_title}':fontfile=/System/Library/Fonts/AppleSDGothicNeo.ttc:"
+                    f"drawtext=text='{escaped_title}':fontfile={font_path}:"
                     f"fontsize=56:fontcolor=white:x=(w-text_w)/2:y=42:borderw=4:bordercolor=black@0.8,"
                     # Inner highlight
-                    f"drawtext=text='{segment_title}':fontfile=/System/Library/Fonts/AppleSDGothicNeo.ttc:"
+                    f"drawtext=text='{escaped_title}':fontfile={font_path}:"
                     f"fontsize=56:fontcolor=white:x=(w-text_w)/2:y=40"
                 )
 
@@ -769,6 +791,12 @@ class VideoComposer:
                 # Combine video with audio and burn in subtitles
                 video_input = ffmpeg.input(concatenated_video)
                 audio_input = ffmpeg.input(str(concatenated_audio))
+                
+                # Apply speed and volume to audio (before mixing with background music or output)
+                speed_factor = 1.2  # 1.2x speed
+                volume_boost = 1.5  # 50% volume increase
+                audio_volume = audio_input.filter('volume', volume_boost)
+                audio_speed = audio_volume.filter('atempo', speed_factor)
 
                 # Use subtitles filter with force_style to ensure Korean font is used
                 # The subtitles filter requires proper encoding - ensure UTF-8 for Korean characters
@@ -785,25 +813,70 @@ class VideoComposer:
                     bgm_generator = BackgroundMusicGenerator(self.config, self.logger)
 
                     # Get total audio duration + padding for last segment
-                    total_duration = sum(seg['audio_duration'] for seg in segments_data) + 1.5
-                    bgm_path = bgm_generator.generate_background_music(
-                        duration=total_duration,
-                        output_dir=output_dir
-                    )
-
-                    # Mix voiceover with background music
-                    bgm_input = ffmpeg.input(bgm_path)
+                    # Note: Background music uses original duration (not speeded up like voiceover)
+                    total_audio_duration = sum(seg['audio_duration'] for seg in segments_data) + 1.5
                     
-                    # Apply volume to background music before mixing
-                    bgm_volume = bgm_input.filter('volume', self.config.background_music_volume)
+                    try:
+                        bgm_path = bgm_generator.generate_background_music(
+                            duration=total_audio_duration,
+                            output_dir=output_dir
+                        )
+                        
+                        self.logger.info(
+                            "background_music_generated",
+                            bgm_path=bgm_path,
+                            duration=total_audio_duration,
+                            file_exists=Path(bgm_path).exists() if bgm_path else False
+                        )
+                        
+                        if not bgm_path or not Path(bgm_path).exists():
+                            self.logger.warning(
+                                "background_music_file_not_found",
+                                bgm_path=bgm_path,
+                                action="skipping_background_music"
+                            )
+                            # Fall through to no background music case
+                            raise FileNotFoundError(f"Background music file not found: {bgm_path}")
 
-                    # Mix audio: voiceover at full volume + background music at reduced volume
-                    mixed_audio = ffmpeg.filter(
-                        [audio_input, bgm_volume],
-                        'amix',
-                        inputs=2,
-                        duration='shortest'
-                    )
+                        # Mix voiceover with background music
+                        bgm_input = ffmpeg.input(bgm_path)
+                        
+                        # Apply volume to background music before mixing
+                        bgm_volume = bgm_input.filter('volume', self.config.background_music_volume)
+
+                        # Mix audio: voiceover (already has volume and speed applied) + background music at reduced volume
+                        # Use 'longest' so background music plays for full duration even if voiceover ends early (due to speed up)
+                        mixed_audio = ffmpeg.filter(
+                            [audio_speed, bgm_volume],
+                            'amix',
+                            inputs=2,
+                            duration='longest'  # Use longest to ensure background music plays full duration
+                        )
+
+                        output = ffmpeg.output(
+                            video_with_subs,
+                            mixed_audio,
+                            str(final_video),
+                            vcodec='libx264',
+                            acodec='aac',
+                            audio_bitrate='192k'
+                        )
+                    except (FileNotFoundError, VideoCompositionError, VideoGenerationError, Exception) as e:
+                        # If background music generation fails, log and fall back to voiceover only
+                        self.logger.warning(
+                            "background_music_failed_fallback",
+                            error=str(e),
+                            error_type=type(e).__name__,
+                            action="using_voiceover_only"
+                        )
+                        output = ffmpeg.output(
+                            video_with_subs,
+                            audio_speed,  # Use voiceover with volume and speed
+                            str(final_video),
+                            vcodec='libx264',
+                            acodec='aac',
+                            audio_bitrate='192k'
+                        )
 
                     output = ffmpeg.output(
                         video_with_subs,
@@ -814,9 +887,10 @@ class VideoComposer:
                         audio_bitrate='192k'
                     )
                 else:
+                    # Use voiceover with volume and speed already applied (when no background music)
                     output = ffmpeg.output(
                         video_with_subs,
-                        audio_input,
+                        audio_speed,  # Already has volume boost and speed applied
                         str(final_video),
                         vcodec='libx264',
                         acodec='aac',
