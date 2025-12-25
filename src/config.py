@@ -19,13 +19,15 @@ load_dotenv()
 class Config:
     """Configuration settings for the video generation pipeline."""
 
-    # API Keys
+    # API Keys (required)
     news_api_key: str
     claude_api_key: str
     google_api_key: str
+    elevenlabs_api_key: str
+    
+    # API Keys (optional)
     kling_access_key: Optional[str] = None
     kling_secret_key: Optional[str] = None
-    elevenlabs_api_key: str
 
     # News API Settings
     news_category: str = "business"
