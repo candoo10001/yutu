@@ -282,11 +282,48 @@ class VideoPipeline:
                         segment_number=segment.segment_number,
                         reason="no_predefined_media_match"
                     )
-                    image_path = self.image_generator.generate_image(
-                        prompt=image_prompt,
-                        output_dir=self.config.output_dir,
-                        aspect_ratio=self.config.video_aspect_ratio
-                    )
+                    try:
+                        image_path = self.image_generator.generate_image(
+                            prompt=image_prompt,
+                            output_dir=self.config.output_dir,
+                            aspect_ratio=self.config.video_aspect_ratio
+                        )
+                    except VideoGenerationError as e:
+                        # If image generation fails with NO_IMAGE, try to use a generic fallback image
+                        if "NO_IMAGE" in str(e):
+                            self.logger.warning(
+                                "image_generation_failed_no_image",
+                                segment_number=segment.segment_number,
+                                error=str(e),
+                                action="retrying_with_simplified_prompt"
+                            )
+                            # Try once more with a simplified prompt
+                            simplified_prompt = f"A professional business-related image representing: {segment_title}"
+                            try:
+                                image_path = self.image_generator.generate_image(
+                                    prompt=simplified_prompt,
+                                    output_dir=self.config.output_dir,
+                                    aspect_ratio=self.config.video_aspect_ratio
+                                )
+                                self.logger.info(
+                                    "image_generation_retry_success",
+                                    segment_number=segment.segment_number
+                                )
+                            except VideoGenerationError:
+                                # If retry also fails, re-raise the original error
+                                self.logger.error(
+                                    "image_generation_retry_failed",
+                                    segment_number=segment.segment_number,
+                                    original_error=str(e)
+                                )
+                                raise VideoGenerationError(
+                                    f"Image generation failed after retry with simplified prompt for segment {segment.segment_number}. "
+                                    f"Original error: {str(e)}. "
+                                    f"Consider adding predefined media for this topic."
+                                )
+                        else:
+                            # For other errors, just re-raise
+                            raise
                 else:
                     self.logger.info(
                         "using_predefined_media",
