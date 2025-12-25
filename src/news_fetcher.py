@@ -126,12 +126,12 @@ class NewsFetcher:
             # Convert to NewsArticle instances
             news_articles = self._parse_articles(articles)
 
-            # Filter and rank articles first (before date filtering)
-            news_articles = self._filter_articles(news_articles, keyword=keyword)
-            news_articles = self._rank_articles(news_articles, keyword=keyword)
-            
             # Filter articles to prioritize recent ones (last 3 days), but keep all if none are recent
             news_articles = self._filter_recent_articles(news_articles)
+            
+            # Filter and rank articles (finance/crypto/tech filtering is ALWAYS applied)
+            news_articles = self._filter_articles(news_articles, keyword=keyword)
+            news_articles = self._rank_articles(news_articles, keyword=keyword)
 
             # Limit to max_news_articles
             news_articles = news_articles[:self.config.max_news_articles]
@@ -266,15 +266,17 @@ class NewsFetcher:
             return recent_articles
         else:
             # No recent articles found - use the most recent of the older ones (already sorted)
-            # Take the top articles regardless of age
+            # But these will still be filtered for finance/crypto/tech relevance in _filter_articles
             self.logger.warning(
                 "no_recent_articles_found",
                 total_articles=len(articles),
                 using_oldest_available=True,
-                oldest_article_days=older_articles[0][1] if older_articles else 0
+                oldest_article_days=older_articles[0][1] if older_articles else 0,
+                note="will_still_filter_for_finance_crypto_tech"
             )
             # Return the most recent articles we have (already sorted by _rank_articles)
-            return articles[:self.config.max_news_articles]
+            # Note: These will be filtered for finance/crypto/tech in _filter_articles
+            return articles
 
     def _filter_articles(self, articles: List[NewsArticle], keyword: Optional[str] = None) -> List[NewsArticle]:
         """
@@ -341,6 +343,7 @@ class NewsFetcher:
                     "quarterly", "quarter", "annual", "ipo", "acquisition", "merger", "investment",
                     "investor", "funding", "valuation", "billion", "million", "dividend", "yield",
                     "fed", "federal reserve", "interest rate", "inflation", "economy", "gdp",
+                    "financial", "finance", "bank", "banking", "currency", "dollar", "euro", "yen",
                     # Crypto/Blockchain terms
                     "bitcoin", "btc", "ethereum", "eth", "cryptocurrency", "crypto", "blockchain",
                     "defi", "nft", "token", "coin", "wallet", "exchange", "mining", "halving",
@@ -349,7 +352,7 @@ class NewsFetcher:
                     "semiconductor", "chip", "gpu", "cpu", "software", "hardware", "startup",
                     "unicorn", "venture capital", "vc", "innovation", "digital", "cloud",
                     "electric vehicle", "ev", "autonomous", "self-driving", "tesla", "nvidia",
-                    "apple", "microsoft", "google", "amazon", "meta", "samsung"
+                    "apple", "microsoft", "google", "amazon", "meta", "samsung", "intel", "amd"
                 ]
                 
                 # Exclude terms that indicate general consumer business (not finance/tech focused)
