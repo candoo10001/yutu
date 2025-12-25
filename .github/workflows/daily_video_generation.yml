@@ -45,6 +45,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Load configuration from .env.example
+        run: |
+          # Copy .env.example to .env (non-API key values will be loaded from here)
+          # API keys will be overridden by secrets in the next step
+          cp .env.example .env
+
       - name: Generate Daily Video
         env:
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}

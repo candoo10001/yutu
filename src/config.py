@@ -12,6 +12,7 @@ from .utils.error_handler import ConfigurationError
 
 
 # Load environment variables from .env file
+# In GitHub Actions, .env.example is copied to .env before running
 load_dotenv()
 
 
