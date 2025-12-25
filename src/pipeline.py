@@ -105,20 +105,21 @@ class VideoPipeline:
         start_time = time.time()
         video_results = []
 
-        # If no keyword provided, randomly select from predefined media topics
+        # If no keyword provided, randomly select from business/finance/crypto/tech keywords
         if not keyword:
             import random
-            # Priority keywords that typically have good news coverage
+            # Priority keywords in business/finance/crypto/technology that typically have good news coverage
+            # Ordered by likelihood of having recent news
             priority_keywords = [
-                'Tesla', 'Bitcoin', 'Ethereum', 'AI', 'stock market',
-                'Nvidia', 'Apple', 'cryptocurrency', 'economy', 'Fed',
-                'inflation', 'tech', 'startup', 'electric vehicle'
+                'Bitcoin', 'cryptocurrency', 'stock market', 'AI', 'Tesla',
+                'Apple', 'economy', 'inflation', 'Fed', 'Ethereum',
+                'tech', 'startup', 'electric vehicle', 'Nvidia', 'Samsung'
             ]
             keyword = random.choice(priority_keywords)
             self.logger.info(
                 "auto_selected_keyword",
                 keyword=keyword,
-                reason="no_keyword_provided_using_predefined_media_topics"
+                reason="no_keyword_provided_using_business_finance_crypto_tech_keywords"
             )
 
         self.logger.info("pipeline_started", mode="YouTube Shorts Generation (Keyword)", keyword=keyword)
@@ -127,6 +128,29 @@ class VideoPipeline:
             # Step 1: Fetch top business news from News API with keyword
             self.logger.info("step_1_fetch_news_with_keyword", keyword=keyword)
             news_articles = self.news_fetcher.fetch_top_business_news(keyword=keyword)
+
+            # If no articles found with keyword, try fallback keywords (business/finance/crypto/tech)
+            if not news_articles and keyword:
+                self.logger.warning(
+                    "no_articles_for_keyword",
+                    keyword=keyword,
+                    action="trying_fallback_keywords"
+                )
+                fallback_keywords = ['Bitcoin', 'cryptocurrency', 'stock market', 'AI', 'economy', 'Tesla']
+                for fallback_keyword in fallback_keywords:
+                    if fallback_keyword == keyword:
+                        continue  # Skip the one we already tried
+                    self.logger.info("trying_fallback_keyword", keyword=fallback_keyword)
+                    news_articles = self.news_fetcher.fetch_top_business_news(keyword=fallback_keyword)
+                    if news_articles:
+                        self.logger.info("fallback_keyword_success", keyword=fallback_keyword)
+                        keyword = fallback_keyword  # Update keyword for logging
+                        break
+
+            # If still no articles, try fetching top headlines without keyword
+            if not news_articles:
+                self.logger.warning("no_articles_with_keywords", action="fetching_top_headlines")
+                news_articles = self.news_fetcher.fetch_top_business_news(keyword=None)
 
             if not news_articles:
                 raise VideoGenerationError("No news articles found")
