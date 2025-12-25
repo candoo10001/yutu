@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(source venv/bin/activate)",
+      "Bash(pip install:*)",
+      "Bash(python3 -m venv:*)",
+      "Bash(python main.py:*)",
+      "Bash(python:*)",
+      "Bash(pip show:*)",
+      "Bash(timeout 120 python:*)",
+      "Bash(brew install:*)",
+      "Bash(ffprobe:*)",
+      "Bash(ls:*)",
+      "Bash(ffmpeg:*)",
+      "WebFetch(domain:ai.google.dev)",
+      "WebFetch(domain:app.klingai.com)",
+      "WebFetch(domain:developers.googleblog.com)",
+      "Bash(test:*)",
+      "Bash(cat:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(python3:*)",
+      "Bash(pip3 install:*)",
+      "Bash(wait)",
+      "Bash(chmod:*)",
+      "Bash(pkill:*)",
+      "Bash(tee:*)"
+    ]
+  }
+}

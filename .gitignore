@@ -1,0 +1,90 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Output files
+output/
+logs/
+*.mp4
+*.mp3
+*.wav
+*.log
+
+# Background music files (but keep README)
+background_music/*.mp3
+background_music/*.wav
+background_music/*.m4a
+background_music/*.aac
+background_music/*.ogg
+!background_music/README.md
+
+# Pre-defined media files (but keep README)
+predefined_media/**/*.jpg
+predefined_media/**/*.jpeg
+predefined_media/**/*.png
+predefined_media/**/*.webp
+predefined_media/**/*.mp4
+predefined_media/**/*.mov
+predefined_media/**/*.avi
+!predefined_media/README.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Temp files
+*.tmp
+.cache/
+
+# YouTube OAuth credentials (do not commit!)
+client_secrets.json
+token.pickle
