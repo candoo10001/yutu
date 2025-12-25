@@ -18,7 +18,11 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
 
-from .youtube_auth_helper import YouTubeAuthHelper
+try:
+    from .youtube_auth_helper import YouTubeAuthHelper
+except ImportError:
+    # Fallback for when running as a script directly
+    from youtube_auth_helper import YouTubeAuthHelper
 
 
 # If modifying these scopes, delete the token.pickle file
