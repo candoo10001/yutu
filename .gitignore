@@ -19,15 +19,6 @@ test_output/*
 # Background music files are now committed to git for GitHub Actions
 # (Make sure they are royalty-free and properly licensed!)
 
-# Pre-defined media files (but keep README)
-predefined_media/**/*.jpg
-predefined_media/**/*.jpeg
-predefined_media/**/*.png
-predefined_media/**/*.webp
-predefined_media/**/*.mp4
-predefined_media/**/*.mov
-predefined_media/**/*.avi
-!predefined_media/README.md
 
 # Python
 __pycache__/
