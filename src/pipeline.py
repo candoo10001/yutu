@@ -369,7 +369,14 @@ class VideoPipeline:
 
             steps_completed.append("create_slideshow")
 
-            # Step 7: Save metadata
+            # Step 7: Generate Korean title for YouTube
+            self.logger.info("generating_korean_title", article_index=article_index)
+            korean_title = self._generate_korean_title(korean_script, korean_article)
+            if not korean_title:
+                # Fallback: extract from script
+                korean_title = self._extract_title_from_script(korean_script)
+
+            # Step 8: Save metadata
             self.logger.info("saving_metadata", article_index=article_index)
             metadata = self._create_metadata_single_article(
                 article=article,
@@ -377,7 +384,8 @@ class VideoPipeline:
                 korean_script=korean_script,
                 script_segments=script_segments,
                 segments_data=segments_data,
-                final_video_path=final_video_path
+                final_video_path=final_video_path,
+                korean_title=korean_title
             )
 
             metadata_path = self._save_metadata(metadata)
@@ -403,6 +411,79 @@ class VideoPipeline:
                 steps_completed=steps_completed
             )
 
+    def _generate_korean_title(self, korean_script: str, korean_article) -> str:
+        """
+        Generate a Korean title for YouTube from the Korean script using Gemini API.
+        
+        Args:
+            korean_script: Korean narration script
+            korean_article: Korean article object
+            
+        Returns:
+            Korean title string
+        """
+        try:
+            from .gemini_client import GeminiClient
+            
+            # Create prompt for title generation
+            prompt = f"""Create a short, catchy Korean title (3-8 words) for a YouTube Shorts video based on this Korean news script:
+
+{korean_script[:500]}
+
+Requirements:
+1. Title must be in Korean
+2. Short and catchy (3-8 words)
+3. Summarizes the main news topic
+4. Suitable for YouTube Shorts
+5. No hashtags or emojis
+
+Output ONLY the title, nothing else. No quotes, no explanations."""
+
+            gemini_client = GeminiClient(self.config, self.logger)
+            title = gemini_client.generate_text(prompt, "generate_korean_title")
+            
+            # Clean up title
+            title = title.strip().strip('"').strip("'").strip()
+            return title[:60]  # Limit length
+            
+        except Exception as e:
+            self.logger.warning("korean_title_generation_failed", error=str(e))
+            return None
+    
+    def _extract_title_from_script(self, korean_script: str) -> str:
+        """
+        Extract a title from Korean script as fallback.
+        
+        Args:
+            korean_script: Korean narration script
+            
+        Returns:
+            Extracted title string
+        """
+        if not korean_script:
+            return "오늘의 뉴스"
+        
+        # Remove common greetings
+        text = korean_script.replace('안녕하세요, ', '').replace('안녕하세요 ', '')
+        text = text.replace('오늘의 ', '').replace('진스 뉴스 소식입니다.', '').replace('뉴스 소식입니다.', '')
+        text = text.strip()
+        
+        # Take first sentence or first 40 characters
+        if '\n\n' in text:
+            text = text.split('\n\n')[0]
+        
+        if '。' in text:
+            title = text.split('。')[0].strip()
+        elif '.' in text:
+            title = text.split('.')[0].strip()
+        else:
+            title = text[:40].strip()
+        
+        if not title or len(title) < 5:
+            return "오늘의 뉴스"
+        
+        return title[:60]
+
     def _create_metadata_single_article(
         self,
         article,
@@ -410,7 +491,8 @@ class VideoPipeline:
         korean_script: str,
         script_segments: list,
         segments_data: list,
-        final_video_path: str
+        final_video_path: str,
+        korean_title: str = None
     ) -> dict:
         """
         Create metadata for a single article video.
@@ -456,6 +538,8 @@ class VideoPipeline:
                 for seg in segments_data
             ],
             "final_video_path": final_video_path,
+            "title": korean_title or "오늘의 뉴스",  # Korean title for YouTube
+            "description": korean_script[:500] if korean_script else "",  # Korean description
             "generation_method": "Image slideshow with Gemini 2.5 Flash Image + ElevenLabs audio + subtitles + background music"
         }
 

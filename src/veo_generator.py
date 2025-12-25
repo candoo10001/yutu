@@ -29,7 +29,7 @@ class VeoGenerator:
         self.logger = logger or structlog.get_logger()
         # Initialize client with API key
         try:
-            self.client = genai.Client(api_key=config.google_api_key)
+        self.client = genai.Client(api_key=config.google_api_key)
         except TypeError as e:
             # Fallback: try with environment variable
             import os
