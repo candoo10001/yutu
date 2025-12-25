@@ -270,23 +270,109 @@ class NewsFetcher:
                         )
                         continue
 
-                # Additional business/finance relevance check for keyword searches
-                business_terms = [
-                    "business", "finance", "financial", "stock", "market", "company", "earnings",
-                    "revenue", "profit", "investment", "trading", "share", "shares", "sales",
-                    "quarter", "quarterly", "annual", "growth", "decline", "rise", "fall",
-                    "CEO", "executive", "corporate", "IPO", "acquisition", "merger"
+                # Additional finance/crypto/tech relevance check - must have specific terms
+                # Exclude general business news (like fast food, retail) unless it's finance/tech focused
+                finance_crypto_tech_terms = [
+                    # Finance/Investment terms
+                    "stock", "stocks", "share", "shares", "trading", "market", "nasdaq", "dow jones",
+                    "s&p", "sp500", "index", "exchange", "earnings", "revenue", "profit", "loss",
+                    "quarterly", "quarter", "annual", "ipo", "acquisition", "merger", "investment",
+                    "investor", "funding", "valuation", "billion", "million", "dividend", "yield",
+                    "fed", "federal reserve", "interest rate", "inflation", "economy", "gdp",
+                    # Crypto/Blockchain terms
+                    "bitcoin", "btc", "ethereum", "eth", "cryptocurrency", "crypto", "blockchain",
+                    "defi", "nft", "token", "coin", "wallet", "exchange", "mining", "halving",
+                    # Technology terms
+                    "ai", "artificial intelligence", "machine learning", "tech", "technology",
+                    "semiconductor", "chip", "gpu", "cpu", "software", "hardware", "startup",
+                    "unicorn", "venture capital", "vc", "innovation", "digital", "cloud",
+                    "electric vehicle", "ev", "autonomous", "self-driving", "tesla", "nvidia",
+                    "apple", "microsoft", "google", "amazon", "meta", "samsung"
                 ]
-                text_to_check = (title_lower + " " + desc_lower).lower()
-                has_business_term = any(term in text_to_check for term in business_terms)
                 
-                if not has_business_term:
+                # Exclude terms that indicate general consumer business (not finance/tech focused)
+                exclude_terms = [
+                    "menu", "restaurant", "food", "fast food", "burger", "fries", "meal",
+                    "retail", "store", "shopping", "customer", "consumer", "product launch",
+                    "advertisement", "ad", "marketing", "brand", "celebrity", "endorsement"
+                ]
+                
+                text_to_check = (title_lower + " " + desc_lower).lower()
+                
+                # Check for exclude terms - if found and no finance/crypto/tech terms, skip
+                has_exclude_term = any(term in text_to_check for term in exclude_terms)
+                has_finance_crypto_tech_term = any(term in text_to_check for term in finance_crypto_tech_terms)
+                
+                # If it has exclude terms but no finance/crypto/tech terms, filter it out
+                if has_exclude_term and not has_finance_crypto_tech_term:
                     self.logger.debug(
-                        "filtered_non_business_article",
+                        "filtered_general_business_article",
                         keyword=keyword,
-                        title=article.title[:50]
+                        title=article.title[:50],
+                        reason="general_consumer_business_not_finance_tech"
                     )
-                continue
+                    continue
+                
+                # For keyword searches, require at least one finance/crypto/tech term
+                if not has_finance_crypto_tech_term:
+                    self.logger.debug(
+                        "filtered_non_finance_tech_article",
+                        keyword=keyword,
+                        title=article.title[:50],
+                        reason="missing_finance_crypto_tech_terms"
+                    )
+                    continue
+            else:
+                # When no keyword provided, still filter for finance/crypto/tech relevance
+                # This ensures top headlines are also finance/crypto/tech focused
+                title_lower = article.title.lower()
+                desc_lower = article.description.lower()
+                text_to_check = (title_lower + " " + desc_lower).lower()
+                
+                finance_crypto_tech_terms = [
+                    # Finance/Investment terms
+                    "stock", "stocks", "share", "shares", "trading", "market", "nasdaq", "dow jones",
+                    "s&p", "sp500", "index", "exchange", "earnings", "revenue", "profit", "loss",
+                    "quarterly", "quarter", "annual", "ipo", "acquisition", "merger", "investment",
+                    "investor", "funding", "valuation", "billion", "million", "dividend", "yield",
+                    "fed", "federal reserve", "interest rate", "inflation", "economy", "gdp",
+                    # Crypto/Blockchain terms
+                    "bitcoin", "btc", "ethereum", "eth", "cryptocurrency", "crypto", "blockchain",
+                    "defi", "nft", "token", "coin", "wallet", "exchange", "mining", "halving",
+                    # Technology terms
+                    "ai", "artificial intelligence", "machine learning", "tech", "technology",
+                    "semiconductor", "chip", "gpu", "cpu", "software", "hardware", "startup",
+                    "unicorn", "venture capital", "vc", "innovation", "digital", "cloud",
+                    "electric vehicle", "ev", "autonomous", "self-driving", "tesla", "nvidia",
+                    "apple", "microsoft", "google", "amazon", "meta", "samsung"
+                ]
+                
+                exclude_terms = [
+                    "menu", "restaurant", "food", "fast food", "burger", "fries", "meal",
+                    "retail", "store", "shopping", "customer", "consumer", "product launch",
+                    "advertisement", "ad", "marketing", "brand", "celebrity", "endorsement"
+                ]
+                
+                has_exclude_term = any(term in text_to_check for term in exclude_terms)
+                has_finance_crypto_tech_term = any(term in text_to_check for term in finance_crypto_tech_terms)
+                
+                # Filter out general consumer business news
+                if has_exclude_term and not has_finance_crypto_tech_term:
+                    self.logger.debug(
+                        "filtered_general_business_article",
+                        title=article.title[:50],
+                        reason="general_consumer_business_not_finance_tech"
+                    )
+                    continue
+                
+                # Require finance/crypto/tech terms even for top headlines
+                if not has_finance_crypto_tech_term:
+                    self.logger.debug(
+                        "filtered_non_finance_tech_article",
+                        title=article.title[:50],
+                        reason="missing_finance_crypto_tech_terms"
+                    )
+                    continue
 
             filtered.append(article)
 
