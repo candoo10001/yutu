@@ -45,9 +45,11 @@ class VideoComposer:
             # Percentages
             (r'퍼센트', '%'),
 
-            # Currency
-            (r'달러', '$'),
-            (r'원', '₩'),
+            # Currency - only replace when it's clearly a currency unit
+            # Match when preceded by numbers/spaces and followed by space/punctuation/end
+            (r'(\d+)\s*달러(?=\s|[,.]|$)', r'\1$'),  # 100달러, 천달러 etc (after numbers)
+            (r'(\d+)\s*원(?=\s|[,.]|$)', r'\1₩'),  # 100원, 천원 etc (after numbers)
+            (r'(억|만|천|백)\s*원(?=\s|[,.]|$)', r'\1₩'),  # 억원, 만원, 천원 (after number words)
 
             # Common fractions and decimals (context-aware)
             (r'일점오', '1.5'),
@@ -64,17 +66,18 @@ class VideoComposer:
             (r'(\d+)\s*억', r'\1억'),  # Keep spacing correct for billions
             (r'(\d+)\s*만', r'\1만'),  # Keep spacing correct for ten-thousands
 
-            # Quarter references (분기)
-            (r'일\s*분기', '1분기'),
-            (r'이\s*분기', '2분기'),
-            (r'삼\s*분기', '3분기'),
-            (r'사\s*분기', '4분기'),
+            # Quarter references (분기) - only at word boundaries
+            (r'(?<!\S)일\s*분기', '1분기'),
+            (r'(?<!\S)이\s*분기', '2분기'),
+            (r'(?<!\S)삼\s*분기', '3분기'),
+            (r'(?<!\S)사\s*분기', '4분기'),
 
-            # Common number + 억 patterns
-            (r'십억', '10억'),
-            (r'백억', '100억'),
-            (r'천억', '1000억'),
-            (r'일조', '1조'),
+            # Common number + 억 patterns - only match standalone, not parts of larger numbers
+            # Use negative lookbehind to ensure not preceded by other number words
+            (r'(?<!일|이|삼|사|오|육|칠|팔|구|십|백|천)십억', '10억'),
+            (r'(?<!일|이|삼|사|오|육|칠|팔|구|십|백|천)백억', '100억'),
+            (r'(?<!일|이|삼|사|오|육|칠|팔|구|십|백|천)천억', '1000억'),
+            (r'(?<!일|이|삼|사|오|육|칠|팔|구|십|백|천)일조', '1조'),
         ]
 
         result = text
