@@ -842,6 +842,7 @@ class VideoComposer:
                                 chunk_text = ' '.join(word_chunk)
 
                             # Calculate timing for this subtitle chunk
+                            # Subtitles sync exactly with narrative voice timing
                             start_time = current_time
                             end_time = current_time + (time_per_word * chunk_word_count)
 
@@ -929,6 +930,64 @@ class VideoComposer:
                     x=video_width-padding_width, y=0, w=padding_width, h='ih',
                     color='0x87CEEB', t='fill')
 
+                # Calculate total audio duration for icon animation
+                total_audio_duration = sum(seg['audio_duration'] for seg in segments_data) / speed_factor
+
+                # Add spinning business icon in bottom left corner for lively effect
+                # Position: Bottom left corner, just inside the sky blue padding
+                icon_size = 180  # Much larger size for clear visibility
+                icon_x = 70  # 70px from left edge (just inside sky blue padding)
+                icon_y = video_height - 250  # 250px from bottom (above sky blue padding)
+
+                # Create spinning icon overlay
+                # The icon rotates continuously: 1 full rotation every 3 seconds (120 degrees/second)
+                # Priority: Use channel logo from assets folder, fallback to generated icon
+                channel_logo_path = output_path.parent / 'assets' / 'channel_logo.png'
+
+                if channel_logo_path.exists():
+                    # Use custom channel logo and resize it (always regenerate to apply new size)
+                    icon_path = output_path / f'resized_channel_logo_{icon_size}.png'
+                    from PIL import Image
+                    logo = Image.open(channel_logo_path)
+                    # Resize to icon_size while maintaining aspect ratio
+                    logo.thumbnail((icon_size, icon_size), Image.Resampling.LANCZOS)
+                    logo.save(str(icon_path))
+                else:
+                    # Fallback: Create default business icon
+                    icon_path = output_path / 'business_icon.png'
+                    if not icon_path.exists():
+                        from PIL import Image, ImageDraw, ImageFont
+                        img = Image.new('RGBA', (icon_size, icon_size), (0, 0, 0, 0))
+                        draw = ImageDraw.Draw(img)
+                        circle_color = (135, 206, 235, 255)  # Sky blue
+                        margin = icon_size // 10
+                        draw.ellipse([margin, margin, icon_size-margin, icon_size-margin], fill=circle_color)
+                        try:
+                            font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", icon_size//2)
+                        except:
+                            font = ImageFont.load_default()
+                        text = "$"
+                        bbox = draw.textbbox((0, 0), text, font=font)
+                        text_width = bbox[2] - bbox[0]
+                        text_height = bbox[3] - bbox[1]
+                        text_x = (icon_size - text_width) // 2
+                        text_y = (icon_size - text_height) // 2 - 5
+                        draw.text((text_x, text_y), text, fill='white', font=font)
+                        img.save(str(icon_path))
+
+                # Add spinning icon overlay for lively effect
+                # Using FFmpeg's rotate filter with time-based angle
+                icon_input = ffmpeg.input(str(icon_path), loop=1)
+                # Rotate icon: 360 degrees every 3 seconds = 2*PI radians every 3 seconds
+                rotated_icon = icon_input.filter('rotate', 't*2*PI/3', fillcolor='none')
+                video_with_subs = ffmpeg.overlay(
+                    video_with_subs,
+                    rotated_icon,
+                    x=icon_x,
+                    y=icon_y,
+                    shortest=1
+                )
+
                 # Add background music if enabled
                 if self.config.enable_background_music:
                     self.logger.info("adding_background_music")
@@ -937,9 +996,7 @@ class VideoComposer:
                     from .background_music_generator import BackgroundMusicGenerator
                     bgm_generator = BackgroundMusicGenerator(self.config, self.logger)
 
-                    # Get total audio duration adjusted for speed factor
-                    # Background music must match the sped-up voiceover duration
-                    total_audio_duration = sum(seg['audio_duration'] for seg in segments_data) / speed_factor
+                    # total_audio_duration already calculated above for icon overlay
                     
                     try:
                         bgm_path = bgm_generator.generate_background_music(
