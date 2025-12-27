@@ -25,7 +25,8 @@
       "Bash(wait)",
       "Bash(chmod:*)",
       "Bash(pkill:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(git add:*)"
     ]
   }
 }

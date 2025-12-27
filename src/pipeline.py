@@ -506,8 +506,62 @@ Output ONLY the title, nothing else. No quotes, no explanations."""
         
         if not title or len(title) < 5:
             return "오늘의 뉴스"
-        
+
         return title[:60]
+
+    def _generate_youtube_description(self, korean_script: str, article) -> str:
+        """
+        Generate an engaging YouTube description with relevant hashtags.
+
+        Args:
+            korean_script: Korean narration script
+            article: News article object
+
+        Returns:
+            Engaging description with hashtags
+        """
+        try:
+            from .gemini_client import GeminiClient
+
+            # Create prompt for description generation
+            prompt = f"""Create an engaging, short YouTube Shorts description (2-3 sentences) in Korean for this news content:
+
+{korean_script[:800]}
+
+Requirements:
+1. Write 2-3 compelling sentences in Korean that hook viewers
+2. Make it interesting and convincing
+3. Focus on the key impact or insight
+4. Then add relevant hashtags in both Korean and English
+5. Include topic-specific hashtags (e.g., for Bitcoin: #비트코인 #bitcoin #coin #crypto)
+6. Format: [Description sentences]
+
+[Hashtags on new lines]
+
+Output ONLY the description with hashtags, nothing else."""
+
+            gemini_client = GeminiClient(self.config, self.logger)
+            description = gemini_client.generate_text(prompt, "generate_youtube_description")
+
+            # Clean up description
+            description = description.strip()
+
+            # Add source if available
+            if hasattr(article, 'source') and article.source:
+                source_name = article.source if isinstance(article.source, str) else article.source.get('name', '')
+                if source_name:
+                    description += f"\n\n출처: {source_name}"
+
+            return description[:1000]  # Limit length
+
+        except Exception as e:
+            self.logger.warning("youtube_description_generation_failed", error=str(e))
+            # Fallback: Use first part of script with basic hashtags
+            description = korean_script[:200].strip()
+            if '.' in description:
+                description = '.'.join(description.split('.')[:2]) + '.'
+            description += "\n\n#주식 #투자 #뉴스 #finance #investing #news"
+            return description
 
     def _create_metadata_single_article(
         self,
@@ -524,6 +578,9 @@ Output ONLY the title, nothing else. No quotes, no explanations."""
         Returns:
             Metadata dictionary
         """
+        # Generate engaging YouTube description with relevant hashtags
+        youtube_description = self._generate_youtube_description(korean_script, article)
+
         return {
             "generated_at": datetime.now().isoformat(),
             "config": {
@@ -558,7 +615,7 @@ Output ONLY the title, nothing else. No quotes, no explanations."""
             ],
             "final_video_path": final_video_path,
             "title": korean_title or "오늘의 뉴스",  # Korean title for YouTube
-            "description": korean_script[:500] if korean_script else "",  # Korean description
+            "description": youtube_description,  # Engaging description with relevant hashtags
             "generation_method": "Gemini native Korean script generation with Google Search + Imagen + ElevenLabs audio + subtitles + background music"
         }
 

@@ -124,12 +124,8 @@ class YouTubeUploader:
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video file not found: {video_path}")
 
-        # Add #Shorts to title and description for YouTube Shorts
-        if '#Shorts' not in title and len(title) < 92:
-            title = f"{title} #Shorts"
-
-        if '#Shorts' not in description:
-            description = f"{description}\n\n#Shorts #KoreanNews #뉴스"
+        # Do NOT add #Shorts to title (let algorithm detect it)
+        # Description already contains relevant hashtags from metadata generation
 
         # Prepare video metadata
         body = {

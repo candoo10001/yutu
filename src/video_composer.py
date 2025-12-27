@@ -649,14 +649,10 @@ class VideoComposer:
                 ken_burns = movement_patterns[i % len(movement_patterns)]
 
                 # Enhanced title overlay with gradient background and glow effect
-                # Prepare title overlay with Korean font support (cross-platform)
-                import platform
-                if platform.system() == "Darwin":  # macOS
-                    font_path = "/System/Library/Fonts/AppleSDGothicNeo.ttc"
-                    font_name = "AppleSDGothicNeo-Regular"
-                else:  # Linux (Ubuntu) - use Noto Sans CJK
-                    font_path = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
-                    font_name = "Noto Sans CJK KR"
+                # Prepare title overlay with rounded, cute Korean font
+                # Use project-bundled font for cross-platform compatibility
+                font_path = str(Path(__file__).parent.parent / "fonts" / "NanumSquareB.ttf")
+                font_name = "NanumSquare"
                 
                 # Escape special characters in title text for ffmpeg
                 # Colons need to be escaped as they're used as parameter separators in filters
@@ -753,12 +749,12 @@ class VideoComposer:
                 subtitle_file = output_path / f"subtitles_{timestamp}.ass"
 
                 # Get font name for ASS file
-                # Use NanumSquare/Nanum Gothic - friendly, modern Korean fonts
+                # Use rounded, cute Korean fonts for friendly appearance
                 import platform
                 if platform.system() == "Darwin":  # macOS
-                    font_name = "NanumSquare"
+                    font_name = "NanumSquare"  # Rounded, friendly font
                 else:  # Linux (Ubuntu) - install with: apt-get install fonts-nanum
-                    font_name = "Nanum Gothic"
+                    font_name = "NanumSquare"  # Rounded, friendly font
 
                 with open(subtitle_file, 'w', encoding='utf-8') as f:
                     # Write ASS header with style definition
