@@ -565,6 +565,12 @@ class VideoComposer:
                 # Get segment title for overlay
                 segment_title = segment.get('title', '').replace("'", "\\'")
 
+                # Truncate title if too long to prevent overflow
+                # For short-form video, keep titles concise (max 10 chars)
+                max_title_length = 10
+                if len(segment_title) > max_title_length:
+                    segment_title = segment_title[:max_title_length] + "..."
+
                 # Check if media is a video or image
                 if self._is_video_file(media_path):
                     # Handle pre-defined video
@@ -656,22 +662,26 @@ class VideoComposer:
                 # Colons need to be escaped as they're used as parameter separators in filters
                 escaped_title = segment_title.replace("'", "'\\''").replace(":", "\\:")
 
-                # Enhanced title for mobile visibility: larger font (80), extra tall box (260), extreme top padding
-                # Extreme top padding: text starts at ~160px from top for absolute maximum mobile visibility
+                # Enhanced title for mobile visibility: larger font (80), extra tall box (440), extreme top padding
+                # Extreme top padding: text starts at ~220px from top for absolute maximum mobile visibility
                 title_filter = (
-                    # Gradient background bar (dark to transparent)
-                    f"drawbox=y=0:color=black@0.8:width={width}:height=260:t=fill,"
+                    # Sky blue padding at top (solid color, no opacity)
+                    f"drawbox=y=0:color=0x87CEEB:width={width}:height=40:t=fill,"
+                    # Grayish-black background bar (solid, not pure black)
+                    f"drawbox=y=40:color=0x3a3a3a:width={width}:height=360:t=fill,"
+                    # Sky blue padding at bottom of title area (solid color, no opacity)
+                    f"drawbox=y=400:color=0x87CEEB:width={width}:height=40:t=fill,"
                     # Outer glow effect (multiple layers for smooth glow)
                     f"drawtext=text='{escaped_title}':fontfile={font_path}:"
-                    f"fontsize=80:fontcolor=yellow@0.3:x=(w-text_w)/2:y=158:borderw=0,"
+                    f"fontsize=80:fontcolor=yellow@0.3:x=(w-text_w)/2:y=218:borderw=0,"
                     f"drawtext=text='{escaped_title}':fontfile={font_path}:"
-                    f"fontsize=80:fontcolor=yellow@0.2:x=(w-text_w)/2:y=156:borderw=0,"
+                    f"fontsize=80:fontcolor=yellow@0.2:x=(w-text_w)/2:y=216:borderw=0,"
                     # Main text with bold outline for readability
                     f"drawtext=text='{escaped_title}':fontfile={font_path}:"
-                    f"fontsize=80:fontcolor=white:x=(w-text_w)/2:y=162:borderw=5:bordercolor=black@0.9,"
+                    f"fontsize=80:fontcolor=white:x=(w-text_w)/2:y=222:borderw=5:bordercolor=black@0.9,"
                     # Inner highlight layer
                     f"drawtext=text='{escaped_title}':fontfile={font_path}:"
-                    f"fontsize=80:fontcolor=white:x=(w-text_w)/2:y=160"
+                    f"fontsize=80:fontcolor=white:x=(w-text_w)/2:y=220"
                 )
 
                 # Combine Ken Burns effect with title overlay
@@ -735,14 +745,38 @@ class VideoComposer:
 
             audio_list_file.unlink()  # Clean up
 
-            # Step 4: Create subtitle file (SRT format) with word-by-word timing
+            # Step 4: Create subtitle file (ASS format) with proper styling
             # Note: speed_factor is already defined earlier when creating video clips
             # Adjust subtitle timing to match sped-up audio (divide by speed_factor)
             if self.config.enable_subtitles:
                 self.logger.info("creating_subtitle_file", speed_factor=speed_factor)
-                subtitle_file = output_path / f"subtitles_{timestamp}.srt"
+                subtitle_file = output_path / f"subtitles_{timestamp}.ass"
+
+                # Get font name for ASS file
+                # Use NanumSquare/Nanum Gothic - friendly, modern Korean fonts
+                import platform
+                if platform.system() == "Darwin":  # macOS
+                    font_name = "NanumSquare"
+                else:  # Linux (Ubuntu) - install with: apt-get install fonts-nanum
+                    font_name = "Nanum Gothic"
 
                 with open(subtitle_file, 'w', encoding='utf-8') as f:
+                    # Write ASS header with style definition
+                    f.write("[Script Info]\n")
+                    f.write("ScriptType: v4.00+\n")
+                    f.write("PlayResX: 1080\n")
+                    f.write("PlayResY: 1920\n")
+                    f.write("WrapStyle: 1\n\n")
+
+                    f.write("[V4+ Styles]\n")
+                    f.write("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n")
+                    # PrimaryColour=white text, OutlineColour=very dark gray outline, BackColour=very dark gray background box
+                    # Spacing=5 adds character spacing for better readability
+                    f.write(f"Style: Default,{font_name},{self.config.subtitle_font_size},&H00FFFFFF,&H000000FF,&H00282828,&H00282828,0,0,0,0,100,100,5,0,3,6,2,2,60,60,820,1\n\n")
+
+                    f.write("[Events]\n")
+                    f.write("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
+
                     current_time = 0.0
                     subtitle_index = 1
 
@@ -811,14 +845,15 @@ class VideoComposer:
                             start_time = current_time
                             end_time = current_time + (time_per_word * chunk_word_count)
 
-                            # SRT format:
-                            # 1
-                            # 00:00:00,000 --> 00:00:04,000
-                            # Subtitle text (can have multiple lines)
-                            f.write(f"{subtitle_index}\n")
-                            f.write(f"{self._format_srt_time(start_time)} --> {self._format_srt_time(end_time)}\n")
-                            f.write(f"{chunk_text}\n")
-                            f.write("\n")
+                            # Convert newlines to ASS format (\N instead of \n)
+                            ass_text = chunk_text.replace('\n', '\\N')
+
+                            # Add padding around text using hard spaces (\h in ASS format)
+                            # This creates visual padding inside the background box
+                            ass_text = f"\\h\\h{ass_text}\\h\\h"
+
+                            # ASS format: Dialogue: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+                            f.write(f"Dialogue: 0,{self._format_ass_time(start_time)},{self._format_ass_time(end_time)},Default,,0,0,0,,{ass_text}\n")
 
                             subtitle_index += 1
                             current_time = end_time
@@ -838,31 +873,7 @@ class VideoComposer:
                 # With PlayResY=1920 (full video height), font size needs to be larger for visibility
                 # Font size of 100 with PlayResY=1920 provides good readability on mobile devices
                 # Using Alignment=2 (bottom-center) with MarginV=960 to position in vertical center
-                # FontName: Use system font that supports Korean (Noto Sans CJK on Linux, AppleSDGothicNeo on macOS)
-                import platform
-                if platform.system() == "Darwin":  # macOS
-                    font_name = "AppleSDGothicNeo-Regular"
-                else:  # Linux (Ubuntu) - use Noto Sans CJK which supports Korean
-                    font_name = "Noto Sans CJK KR"
-                
-                subtitle_style = (
-                    f"FontName={font_name},"
-                    f"FontSize={self.config.subtitle_font_size},"
-                    f"PrimaryColour=&HFFFFFF,"
-                    f"BackColour=&H80000000,"
-                    f"BorderStyle=3,"
-                    f"Outline=2,"
-                    f"Shadow=1,"
-                    f"Alignment=2,"  # Bottom-center alignment
-                    f"MarginV=860,"  # Large margin from bottom = middle position (PlayResY=1920, so 960 = center)
-                    f"MarginL=60,"  # Left margin to limit width and make subtitles more compact
-                    f"MarginR=60,"  # Right margin to limit width and make subtitles more compact
-                    f"PlayResX=1080,"  # Video width reference (matches actual video width for proper scaling)
-                    f"PlayResY=1920,"  # Video height reference (matches actual video height for proper scaling)
-                    f"WordWrap=1"  # Enable word wrapping to prevent word cutoff
-                )
-
-                # Combine video with audio and burn in subtitles
+                # Combine video with audio and burn in subtitles (ASS format with embedded styling)
                 video_input = ffmpeg.input(concatenated_video)
                 audio_input = ffmpeg.input(str(concatenated_audio))
 
@@ -872,11 +883,51 @@ class VideoComposer:
                 audio_volume = audio_input.filter('volume', volume_boost)
                 audio_speed = audio_volume.filter('atempo', speed_factor)
 
-                # Use subtitles filter with force_style to ensure Korean font is used
-                # The subtitles filter requires proper encoding - ensure UTF-8 for Korean characters
-                # Note: charenc parameter is not valid for subtitles filter, encoding is handled by file
-                video_with_subs = video_input.filter('subtitles', str(subtitle_file),
-                                                     force_style=subtitle_style)
+                # Use subtitles filter to burn in ASS subtitles
+                # Styling is embedded in the ASS file itself
+                video_with_subs = video_input.filter('subtitles', str(subtitle_file))
+
+                # Add sky blue gradient padding bars at top and bottom of entire video
+                # This creates a frame effect around the whole video
+                aspect_ratio = self.config.video_aspect_ratio
+                if aspect_ratio == "9:16":
+                    video_height = 1920
+                elif aspect_ratio == "16:9":
+                    video_height = 1080
+                else:  # 1:1
+                    video_height = 1080
+
+                # Add sky blue padding bars on all four edges to create a frame effect
+                # Solid color (no opacity) for clearer visibility
+                padding_width = 50  # Larger padding for more prominent frame effect
+
+                # Top padding bar
+                video_with_subs = video_with_subs.filter('drawbox',
+                    x=0, y=0, w='iw', h=padding_width,
+                    color='0x87CEEB', t='fill')
+
+                # Bottom padding bar
+                video_with_subs = video_with_subs.filter('drawbox',
+                    x=0, y=video_height-padding_width, w='iw', h=padding_width,
+                    color='0x87CEEB', t='fill')
+
+                # Get video width for left/right padding
+                if aspect_ratio == "9:16":
+                    video_width = 1080
+                elif aspect_ratio == "16:9":
+                    video_width = 1920
+                else:  # 1:1
+                    video_width = 1080
+
+                # Left padding bar
+                video_with_subs = video_with_subs.filter('drawbox',
+                    x=0, y=0, w=padding_width, h='ih',
+                    color='0x87CEEB', t='fill')
+
+                # Right padding bar
+                video_with_subs = video_with_subs.filter('drawbox',
+                    x=video_width-padding_width, y=0, w=padding_width, h='ih',
+                    color='0x87CEEB', t='fill')
 
                 # Add background music if enabled
                 if self.config.enable_background_music:
@@ -886,9 +937,9 @@ class VideoComposer:
                     from .background_music_generator import BackgroundMusicGenerator
                     bgm_generator = BackgroundMusicGenerator(self.config, self.logger)
 
-                    # Get total audio duration (no padding needed)
-                    # Note: Background music uses original duration (not speeded up like voiceover)
-                    total_audio_duration = sum(seg['audio_duration'] for seg in segments_data)
+                    # Get total audio duration adjusted for speed factor
+                    # Background music must match the sped-up voiceover duration
+                    total_audio_duration = sum(seg['audio_duration'] for seg in segments_data) / speed_factor
                     
                     try:
                         bgm_path = bgm_generator.generate_background_music(
@@ -1029,6 +1080,23 @@ class VideoComposer:
         millis = int((seconds % 1) * 1000)
 
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+    def _format_ass_time(self, seconds: float) -> str:
+        """
+        Format seconds as ASS timestamp (H:MM:SS.CC).
+
+        Args:
+            seconds: Time in seconds
+
+        Returns:
+            Formatted ASS timestamp
+        """
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        centisecs = int((seconds % 1) * 100)
+
+        return f"{hours}:{minutes:02d}:{secs:02d}.{centisecs:02d}"
 
     def _color_to_hex(self, color: str) -> str:
         """

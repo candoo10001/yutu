@@ -147,9 +147,10 @@ class GeminiScriptGenerator:
    - 단어 수: {target_words_min}-{target_words_max} 단어
    - 이 길이는 매우 중요합니다!
 
-2. **시작 방식**:
-   - 인사말 금지 (❌ "안녕하십니까", ❌ "오늘은", ❌ "말씀드리겠습니다")
-   - 뉴스 내용으로 바로 시작하세요
+2. **시작 방식** (매우 중요!):
+   - ❌ 절대 금지: "알겠습니다", "다음은", "요청하신", "스크립트입니다" 같은 AI 응답
+   - ❌ 인사말 금지: "안녕하십니까", "오늘은", "말씀드리겠습니다"
+   - ✅ 뉴스 내용으로 바로 시작
    - 예: "테슬라 주가가 오늘 500달러를 돌파했습니다."
 
 3. **내용 구성**:
@@ -174,6 +175,13 @@ class GeminiScriptGenerator:
      * "3분기" → "삼 분기"
      * "10억" → "십억"
 
+   - 큰 숫자 처리 (매우 중요!):
+     * ❌ 절대 사용 금지: 콤마 (,), 소수점 3자리 이상
+     * "87,824.007813" → "약 팔만 팔천" (반올림, 간단하게)
+     * "88,000 USDT" → "팔만 팔천 유에스디티"
+     * "$1,234.56" → "천이백삼십사 달러"
+     * 소수점은 최대 2자리까지만: "1.234" → "일점이삼"
+
    - 영어 약어와 회사명을 한글 발음으로:
      * "Tesla" → "테슬라"
      * "Nvidia" → "엔비디아"
@@ -189,12 +197,12 @@ class GeminiScriptGenerator:
      * "₩" → "원"
 
 **출력 형식:**
-- 스크립트만 출력하세요
-- 설명이나 주석 금지
-- 마크다운 포맷 금지
-- 순수 한국어 텍스트만 출력
+- ❌ 절대 금지: "알겠습니다", "다음은 스크립트입니다" 같은 AI 응답 문구
+- ❌ 금지: 설명, 주석, 마크다운 포맷
+- ✅ 뉴스 내용으로 바로 시작하는 순수 한국어 텍스트만 출력
+- 예: "테슬라 주가가..." (O) / "알겠습니다. 다음은..." (X)
 
-지금 Google Search로 이 주제를 한국어로 검색하여 최신 정보를 찾고, 자연스러운 한국어 뉴스 스크립트를 작성하세요."""
+지금 Google Search로 이 주제를 한국어로 검색하여 최신 정보를 찾고, 뉴스 내용으로 바로 시작하는 자연스러운 한국어 뉴스 스크립트를 작성하세요."""
 
     def _call_gemini_with_search(self, prompt: str) -> str:
         """
@@ -260,7 +268,7 @@ class GeminiScriptGenerator:
 
     def _clean_script(self, script_text: str) -> str:
         """
-        Clean up the script by removing any markdown formatting or extra text.
+        Clean up the script by removing any markdown formatting, AI preambles, or extra text.
 
         Args:
             script_text: Raw script text from Gemini
@@ -278,5 +286,32 @@ class GeminiScriptGenerator:
             if lines and lines[-1].startswith("```"):
                 lines = lines[:-1]
             script_text = "\n".join(lines).strip()
+
+        # Remove AI assistant preambles (common patterns)
+        ai_preambles = [
+            "알겠습니다.",
+            "다음은",
+            "요청하신",
+            "스크립트입니다",
+            "네,",
+            "좋습니다.",
+            "Here is",
+            "Here's",
+        ]
+
+        lines = script_text.split("\n")
+        cleaned_lines = []
+
+        for line in lines:
+            line = line.strip()
+            # Skip lines that are just AI preambles
+            if any(line.startswith(preamble) for preamble in ai_preambles):
+                continue
+            # Skip empty lines at the beginning
+            if not cleaned_lines and not line:
+                continue
+            cleaned_lines.append(line)
+
+        script_text = "\n".join(cleaned_lines).strip()
 
         return script_text

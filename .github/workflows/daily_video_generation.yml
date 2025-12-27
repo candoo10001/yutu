@@ -34,7 +34,7 @@ jobs:
       - name: Install system dependencies (ffmpeg and fonts)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto-cjk fonts-noto-color-emoji
+          sudo apt-get install -y ffmpeg fonts-noto-cjk fonts-noto-color-emoji fonts-nanum
 
       - name: Verify ffmpeg installation
         run: |

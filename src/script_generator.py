@@ -181,8 +181,11 @@ class ScriptGenerator:
 
 **CRITICAL RULES:**
 1. Input is in English, output MUST be in natural, native Korean (not translated Korean)
-2. NO opening greetings or introductions (NO "안녕하십니까", NO "오늘은", NO "말씀드리겠습니다")
-3. Start IMMEDIATELY with the news content
+2. NO opening greetings or introductions - ABSOLUTELY FORBIDDEN:
+   - NO "안녕하십니까", NO "오늘은", NO "말씀드리겠습니다"
+   - NO "뉴스 시작", NO "뉴스입니다", NO "소식입니다"
+   - NO "전해드립니다", NO "알려드립니다"
+3. Start IMMEDIATELY with the main news topic - first sentence must be the core news fact
 4. Write as a native Korean speaker would speak, not as a translation
 
 **News Article (English):**
